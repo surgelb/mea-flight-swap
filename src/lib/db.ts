@@ -461,65 +461,89 @@ const initialSwapRequests: SwapRequest[] = [
 // Database operations helper
 class DB {
   private isBrowser = typeof window !== 'undefined';
+  private syncIntervalId: any = null;
 
   constructor() {
     if (this.isBrowser) {
-      // Check if existing data is outdated (e.g., has less than the 10 profiles we now define)
-      let existingProfiles: PilotProfile[] = [];
-      try {
-        const stored = localStorage.getItem('mfs_profiles');
-        if (stored) {
-          existingProfiles = JSON.parse(stored);
-        }
-      } catch (e) {
-        console.error("Error reading mfs_profiles", e);
-      }
+      // Initialize local storage from defaults if empty or outdated
+      this.initLocalStorage();
 
-      const isOutdated = !localStorage.getItem('mfs_profiles') || existingProfiles.length < 10;
+      // Start Supabase background synchronization if configured
+      if (hasSupabase) {
+        this.syncFromSupabase();
+        this.syncIntervalId = setInterval(() => {
+          this.syncFromSupabase();
+        }, 3000);
+      }
+    }
+  }
 
-      if (isOutdated) {
-        localStorage.setItem('mfs_profiles', JSON.stringify(initialProfiles));
-        localStorage.setItem('mfs_flights', JSON.stringify(initialFlights));
-        localStorage.setItem('mfs_swaps', JSON.stringify(initialSwapRequests));
-        localStorage.setItem('mfs_proposals', JSON.stringify([]));
-        localStorage.setItem('mfs_messages', JSON.stringify([
-          {
-            id: 'msg-init-1',
-            room_id: 'room-rayan-naim',
-            sender_id: 'rayan-id',
-            content: "Hey Naim! I saw you offered a swap. Are you open to trading the LHR sector?",
-            created_at: new Date(Date.now() - 3600000).toISOString()
-          }
-        ]));
-      } else {
-        if (!localStorage.getItem('mfs_profiles')) {
-          localStorage.setItem('mfs_profiles', JSON.stringify(initialProfiles));
-        }
-        if (!localStorage.getItem('mfs_flights')) {
-          localStorage.setItem('mfs_flights', JSON.stringify(initialFlights));
-        }
-        if (!localStorage.getItem('mfs_swaps')) {
-          localStorage.setItem('mfs_swaps', JSON.stringify(initialSwapRequests));
-        }
-        if (!localStorage.getItem('mfs_proposals')) {
-          localStorage.setItem('mfs_proposals', JSON.stringify([]));
-        }
-        if (!localStorage.getItem('mfs_messages')) {
-          localStorage.setItem('mfs_messages', JSON.stringify([
-            {
-              id: 'msg-init-1',
-              room_id: 'room-rayan-naim',
-              sender_id: 'rayan-id',
-              content: "Hey Naim! I saw you offered a swap. Are you open to trading the LHR sector?",
-              created_at: new Date(Date.now() - 3600000).toISOString()
-            }
-          ]));
-        }
+  private initLocalStorage() {
+    let existingProfiles: PilotProfile[] = [];
+    try {
+      const stored = localStorage.getItem('mfs_profiles');
+      if (stored) {
+        existingProfiles = JSON.parse(stored);
       }
-      // Track active session (defaulting to Naim)
-      if (!localStorage.getItem('mfs_current_pilot_id')) {
-        localStorage.setItem('mfs_current_pilot_id', 'naim-id');
+    } catch (e) {
+      console.error("Error reading mfs_profiles", e);
+    }
+
+    const isOutdated = !localStorage.getItem('mfs_profiles') || existingProfiles.length < 10;
+
+    if (isOutdated) {
+      localStorage.setItem('mfs_profiles', JSON.stringify(initialProfiles));
+      localStorage.setItem('mfs_flights', JSON.stringify(initialFlights));
+      localStorage.setItem('mfs_swaps', JSON.stringify(initialSwapRequests));
+      localStorage.setItem('mfs_proposals', JSON.stringify([]));
+      localStorage.setItem('mfs_messages', JSON.stringify([
+        {
+          id: 'msg-init-1',
+          room_id: 'room-rayan-naim',
+          sender_id: 'rayan-id',
+          content: "Hey Naim! I saw you offered a swap. Are you open to trading the LHR sector?",
+          created_at: new Date(Date.now() - 3600000).toISOString()
+        }
+      ]));
+    }
+    if (!localStorage.getItem('mfs_current_pilot_id')) {
+      localStorage.setItem('mfs_current_pilot_id', 'naim-id');
+    }
+  }
+
+  private async syncFromSupabase() {
+    try {
+      const [profilesRes, flightsRes, swapsRes, proposalsRes, messagesRes] = await Promise.all([
+        supabase.from('profiles').select('*'),
+        supabase.from('flight_duties').select('*'),
+        supabase.from('swap_requests').select('*'),
+        supabase.from('swap_proposals').select('*'),
+        supabase.from('chat_messages').select('*')
+      ]);
+
+      if (profilesRes.error) throw profilesRes.error;
+      if (flightsRes.error) throw flightsRes.error;
+      if (swapsRes.error) throw swapsRes.error;
+      if (proposalsRes.error) throw proposalsRes.error;
+      if (messagesRes.error) throw messagesRes.error;
+
+      if (profilesRes.data && profilesRes.data.length > 0) {
+        localStorage.setItem('mfs_profiles', JSON.stringify(profilesRes.data));
       }
+      if (flightsRes.data) {
+        localStorage.setItem('mfs_flights', JSON.stringify(flightsRes.data));
+      }
+      if (swapsRes.data) {
+        localStorage.setItem('mfs_swaps', JSON.stringify(swapsRes.data));
+      }
+      if (proposalsRes.data) {
+        localStorage.setItem('mfs_proposals', JSON.stringify(proposalsRes.data));
+      }
+      if (messagesRes.data) {
+        localStorage.setItem('mfs_messages', JSON.stringify(messagesRes.data));
+      }
+    } catch (err) {
+      console.warn('Supabase sync warning (operating in mock fallback):', err);
     }
   }
 
@@ -563,6 +587,12 @@ class DB {
       profiles.push(profile);
     }
     this.set('mfs_profiles', profiles);
+
+    if (hasSupabase) {
+      supabase.from('profiles').upsert(profile).then(({ error }: any) => {
+        if (error) console.error('Supabase write error (profiles):', error);
+      });
+    }
   }
 
   // Flights
@@ -581,6 +611,12 @@ class DB {
     const filtered = flights.filter(f => !pilotIds.includes(f.pilot_id));
     const combined = [...filtered, ...newFlights];
     this.set('mfs_flights', combined);
+
+    if (hasSupabase) {
+      supabase.from('flight_duties').upsert(newFlights).then(({ error }: any) => {
+        if (error) console.error('Supabase write error (flight_duties):', error);
+      });
+    }
   }
 
   // Swap Requests
@@ -598,6 +634,12 @@ class DB {
     };
     swaps.push(newReq);
     this.set('mfs_swaps', swaps);
+
+    if (hasSupabase) {
+      supabase.from('swap_requests').insert(newReq).then(({ error }: any) => {
+        if (error) console.error('Supabase write error (swap_requests):', error);
+      });
+    }
     return newReq;
   }
 
@@ -620,6 +662,12 @@ class DB {
     };
     proposals.push(newProp);
     this.set('mfs_proposals', proposals);
+
+    if (hasSupabase) {
+      supabase.from('swap_proposals').insert(newProp).then(({ error }: any) => {
+        if (error) console.error('Supabase write error (swap_proposals):', error);
+      });
+    }
     return newProp;
   }
 
@@ -630,6 +678,12 @@ class DB {
       proposals[idx].status = status;
       this.set('mfs_proposals', proposals);
 
+      if (hasSupabase) {
+        supabase.from('swap_proposals').update({ status }).eq('id', id).then(({ error }: any) => {
+          if (error) console.error('Supabase write error (update proposals):', error);
+        });
+      }
+
       // If accepted, update the swap request status to matched
       if (status === 'accepted') {
         const swaps = this.getSwapRequests();
@@ -637,6 +691,12 @@ class DB {
         if (sIdx !== -1) {
           swaps[sIdx].status = 'matched';
           this.set('mfs_swaps', swaps);
+
+          if (hasSupabase) {
+            supabase.from('swap_requests').update({ status: 'matched' }).eq('id', proposals[idx].request_id).then(({ error }: any) => {
+              if (error) console.error('Supabase write error (update swap requests):', error);
+            });
+          }
         }
       }
     }
@@ -660,6 +720,12 @@ class DB {
     const allMessages = this.get<ChatMessage[]>('mfs_messages', []);
     allMessages.push(newMsg);
     this.set('mfs_messages', allMessages);
+
+    if (hasSupabase) {
+      supabase.from('chat_messages').insert(newMsg).then(({ error }: any) => {
+        if (error) console.error('Supabase write error (chat_messages):', error);
+      });
+    }
     return newMsg;
   }
 }
