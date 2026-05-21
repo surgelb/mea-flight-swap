@@ -37,74 +37,12 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    // Fallback mode if Gemini key is missing
+    // Error if Gemini key is missing
     if (!ai) {
-      console.warn('[Register Roster API] GEMINI_API_KEY is not set. Using simulated roster parsing.');
-      // Simulate network & AI latency
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Mock parsed roster structure based on Naim's profile
-      const mockResult = {
-        isValidRoster: true,
-        pilot_metadata: {
-          first_name: "Naim",
-          last_name: "Moghabghab",
-          name: "MOGHABGHAB, NAIM ghassan",
-          id: "18684",
-          rank: "first_officer",
-          base: "BEY",
-          qualifications: ["A320", "A321", "A32A"]
-        },
-        duties: [
-          {
-            day_number: 1,
-            duty_type: "flight",
-            flight_number: "ME201",
-            origin: "BEY",
-            destination: "LHR",
-            departure_time: "2026-05-01T05:11:00Z",
-            arrival_time: "2026-05-01T10:09:00Z",
-            aircraft_type: "A321"
-          },
-          {
-            day_number: 2,
-            duty_type: "flight",
-            flight_number: "ME202",
-            origin: "LHR",
-            destination: "BEY",
-            departure_time: "2026-05-02T12:34:00Z",
-            arrival_time: "2026-05-02T17:24:00Z",
-            aircraft_type: "A321"
-          },
-          { day_number: 3, duty_type: "off" },
-          { day_number: 4, duty_type: "off" },
-          {
-            day_number: 5,
-            duty_type: "training",
-            flight_number: "SIM-1",
-            origin: "BEY",
-            destination: "BEY",
-            departure_time: "2026-05-05T04:28:00Z",
-            arrival_time: "2026-05-05T06:29:00Z",
-            aircraft_type: "A320"
-          },
-          {
-            day_number: 6,
-            duty_type: "standby",
-            reporting_time: "2026-05-06T12:01:00Z",
-            release_time: "2026-05-06T23:59:00Z"
-          }
-        ]
-      };
-
-      const username = "n.moghabghab";
-      const email = "n.moghabghab@mea.com.lb";
-      mockResult.pilot_metadata = {
-        ...mockResult.pilot_metadata,
-        ...({ username, email } as any)
-      };
-
-      return NextResponse.json(mockResult);
+      console.error('[Register Roster API] GEMINI_API_KEY is not set.');
+      return NextResponse.json({ 
+        error: 'Roster parsing service is temporarily unavailable (missing API key configuration).' 
+      }, { status: 500 });
     }
 
     const prompt = `
