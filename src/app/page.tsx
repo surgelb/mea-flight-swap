@@ -1,15 +1,18 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { PlaneTakeoff, ShieldCheck, ArrowRightLeft, Users } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import SignUpModal from '@/components/SignUpModal';
 import { db } from '@/lib/db';
 
 export default function Home() {
   const router = useRouter();
+  const [isSignUpOpen, setIsSignUpOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'signup' | 'login'>('signup');
 
   const handleEnterAs = (pilotId: string) => {
     db.setCurrentPilotId(pilotId);
@@ -84,12 +87,47 @@ export default function Home() {
           </div>
         </Card>
 
-        {/* Pilot Select Portal */}
-        <div className="space-y-4 max-w-md mx-auto">
-          <h3 className="text-xs font-heading font-bold text-neutral-500 tracking-wider uppercase">
-            Select Pilot Persona to Enter
-          </h3>
-          
+        {/* Action Portal */}
+        <div className="space-y-6 max-w-md mx-auto">
+          {/* Sign Up / Login via Roster Box */}
+          <div className="bg-white/60 backdrop-blur-md border border-amber-200 rounded-3xl p-6 shadow-md text-center space-y-4">
+            <h3 className="text-sm font-heading font-bold text-neutral-800">
+              MEA Flight Swap Portal
+            </h3>
+            <p className="text-xs text-neutral-500 leading-normal">
+              Onboard instantly by uploading your roster PDF, or log in to manage your active swap postings.
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button
+                variant="cta"
+                onClick={() => {
+                  setAuthModalMode('signup');
+                  setIsSignUpOpen(true);
+                }}
+                className="w-full justify-center"
+              >
+                Sign Up via Roster Upload
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAuthModalMode('login');
+                  setIsSignUpOpen(true);
+                }}
+                className="w-full justify-center border-primary/40 text-primary hover:bg-pink-500/5 hover:border-primary glow-primary"
+              >
+                Log In to Account
+              </Button>
+            </div>
+          </div>
+
+          <div className="relative flex py-2 items-center">
+            <div className="flex-grow border-t border-neutral-300"></div>
+            <span className="flex-shrink mx-4 text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Or Enter Demo Persona</span>
+            <div className="flex-grow border-t border-neutral-300"></div>
+          </div>
+
+          {/* Pilot Select Portal */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <motion.button
               whileHover={{ scale: 1.04 }}
@@ -127,6 +165,13 @@ export default function Home() {
           </div>
         </div>
       </motion.div>
+
+      {/* Roster Onboarding SignUp Modal */}
+      <SignUpModal 
+        isOpen={isSignUpOpen} 
+        onClose={() => setIsSignUpOpen(false)} 
+        initialMode={authModalMode}
+      />
     </main>
   );
 }

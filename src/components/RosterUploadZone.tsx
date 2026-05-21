@@ -83,66 +83,64 @@ export default function RosterUploadZone({ onUploadSuccess }: RosterUploadZonePr
 
     try {
       // Simulate file upload transition, then call API
-      setTimeout(async () => {
-        startStepAnimation();
-        
-        const response = await fetch('/api/parse-roster', {
-          method: 'POST',
-          body: formData
-        });
+      await new Promise(resolve => setTimeout(resolve, 800));
+      startStepAnimation();
+      
+      const response = await fetch('/api/parse-roster', {
+        method: 'POST',
+        body: formData
+      });
 
-        clearInterval(stepInterval);
+      if (stepInterval!) clearInterval(stepInterval);
 
-        if (!response.ok) {
-          throw new Error('Failed to parse the roster file.');
-        }
+      if (!response.ok) {
+        throw new Error('Failed to parse the roster file.');
+      }
 
-        const data = await response.json();
-        
-        if (data.error) {
-          throw new Error(data.error);
-        }
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
 
-        // Standardize duties array, assign appropriate IDs
-        const parsedDuties: FlightDuty[] = data.duties.map((duty: any, index: number) => ({
-          id: `f-parsed-${Date.now()}-${index}`,
-          pilot_id: data.pilot_metadata.id === '18684' ? 'naim-id' : 'custom-pilot-id',
-          duty_type: duty.duty_type,
-          flight_number: duty.flight_number,
-          origin: duty.origin || null,
-          destination: duty.destination || null,
-          departure_time: duty.departure_time || null,
-          arrival_time: duty.arrival_time || null,
-          reporting_time: duty.reporting_time || (duty.departure_time ? new Date(new Date(duty.departure_time).getTime() - 60 * 60 * 1000).toISOString() : null),
-          release_time: duty.release_time || (duty.arrival_time ? new Date(new Date(duty.arrival_time).getTime() + 30 * 60 * 1000).toISOString() : null),
-          block_time_mins: duty.block_time_mins || null,
-          aircraft_type: duty.aircraft_type || null,
-          day_number: duty.day_number || new Date(duty.departure_time).getDate()
-        }));
+      // Standardize duties array, assign appropriate IDs
+      const parsedDuties: FlightDuty[] = data.duties.map((duty: any, index: number) => ({
+        id: `f-parsed-${Date.now()}-${index}`,
+        pilot_id: data.pilot_metadata.id === '18684' ? 'naim-id' : 'custom-pilot-id',
+        duty_type: duty.duty_type,
+        flight_number: duty.flight_number,
+        origin: duty.origin || null,
+        destination: duty.destination || null,
+        departure_time: duty.departure_time || null,
+        arrival_time: duty.arrival_time || null,
+        reporting_time: duty.reporting_time || (duty.departure_time ? new Date(new Date(duty.departure_time).getTime() - 60 * 60 * 1000).toISOString() : null),
+        release_time: duty.release_time || (duty.arrival_time ? new Date(new Date(duty.arrival_time).getTime() + 30 * 60 * 1000).toISOString() : null),
+        block_time_mins: duty.block_time_mins || null,
+        aircraft_type: duty.aircraft_type || null,
+        day_number: duty.day_number || new Date(duty.departure_time).getDate()
+      }));
 
-        // Update pilot profile with extracted details
-        const currentPilot = db.getCurrentPilot();
-        const updatedPilot = {
-          ...currentPilot,
-          id: data.pilot_metadata.id === '18684' ? 'naim-id' : currentPilot.id,
-          name: data.pilot_metadata.name || currentPilot.name,
-          rank: data.pilot_metadata.rank || currentPilot.rank,
-          base: data.pilot_metadata.base || currentPilot.base
-        };
+      // Update pilot profile with extracted details
+      const currentPilot = db.getCurrentPilot();
+      const updatedPilot = {
+        ...currentPilot,
+        id: data.pilot_metadata.id === '18684' ? 'naim-id' : currentPilot.id,
+        name: data.pilot_metadata.name || currentPilot.name,
+        rank: data.pilot_metadata.rank || currentPilot.rank,
+        base: data.pilot_metadata.base || currentPilot.base
+      };
 
-        db.updateProfile(updatedPilot);
-        db.saveFlights(parsedDuties);
-        
-        setStatus('success');
-        setTimeout(() => {
-          onUploadSuccess(updatedPilot);
-          setStatus('idle');
-        }, 1500);
-
-      }, 800);
+      db.updateProfile(updatedPilot);
+      db.saveFlights(parsedDuties);
+      
+      setStatus('success');
+      setTimeout(() => {
+        onUploadSuccess(updatedPilot);
+        setStatus('idle');
+      }, 1500);
 
     } catch (err: any) {
-      clearInterval(stepInterval!);
+      if (stepInterval!) clearInterval(stepInterval);
       setStatus('error');
       setErrorMessage(err.message || 'An error occurred during schedule processing.');
     }

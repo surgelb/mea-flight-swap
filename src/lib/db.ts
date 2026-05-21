@@ -5,6 +5,7 @@ export interface PilotProfile {
   id: string;
   email: string;
   name: string;
+  username: string;
   rank: 'captain' | 'first_officer';
   base: string;
   qualifications: string[];
@@ -63,6 +64,7 @@ const initialProfiles: PilotProfile[] = [
     id: 'naim-id',
     email: 'n.moghabghab@mea.com.lb',
     name: 'MOGHABGHAB, NAIM ghassan',
+    username: 'n.moghabghab',
     rank: 'first_officer',
     base: 'BEY',
     qualifications: ['A320', 'A321', 'A32A']
@@ -71,6 +73,7 @@ const initialProfiles: PilotProfile[] = [
     id: 'rayan-id',
     email: 'r.mroueh@mea.com.lb',
     name: 'MROUEH, RAYAN jamal',
+    username: 'r.mroueh',
     rank: 'first_officer',
     base: 'BEY',
     qualifications: ['A320', 'A321', 'A32A']
@@ -79,6 +82,7 @@ const initialProfiles: PilotProfile[] = [
     id: 'shibli-id',
     email: 's.awanni@mea.com.lb',
     name: 'AWANNI, SHIBLI ri',
+    username: 's.awanni',
     rank: 'first_officer',
     base: 'BEY',
     qualifications: ['A321']
@@ -87,6 +91,7 @@ const initialProfiles: PilotProfile[] = [
     id: 'rami-id',
     email: 'r.abboud@mea.com.lb',
     name: 'ABBOUD, RAMI hassan',
+    username: 'r.abboud',
     rank: 'first_officer',
     base: 'BEY',
     qualifications: ['A321']
@@ -95,6 +100,7 @@ const initialProfiles: PilotProfile[] = [
     id: 'jamil-id',
     email: 'j.abdulmalak@mea.com.lb',
     name: 'ABDUL MALAK, JAMIL mah',
+    username: 'j.abdulmalak',
     rank: 'first_officer',
     base: 'BEY',
     qualifications: ['A330']
@@ -103,6 +109,7 @@ const initialProfiles: PilotProfile[] = [
     id: 'khaled-id',
     email: 'k.abijomaa@mea.com.lb',
     name: 'ABI JOMAA, KHALED hoss',
+    username: 'k.abijomaa',
     rank: 'first_officer',
     base: 'BEY',
     qualifications: ['A320']
@@ -111,6 +118,7 @@ const initialProfiles: PilotProfile[] = [
     id: 'richard-id',
     email: 'r.abitorbey@mea.com.lb',
     name: 'ABI TOBBY, RICHARD an',
+    username: 'r.abitorbey',
     rank: 'first_officer',
     base: 'BEY',
     qualifications: ['A330']
@@ -119,6 +127,7 @@ const initialProfiles: PilotProfile[] = [
     id: 'paul-id',
     email: 'p.aboueiwan@mea.com.lb',
     name: 'ABOU EIWAN, PAUL edmon',
+    username: 'p.aboueiwan',
     rank: 'first_officer',
     base: 'BEY',
     qualifications: ['A330']
@@ -127,6 +136,7 @@ const initialProfiles: PilotProfile[] = [
     id: 'ziad-id',
     email: 'z.abourjily@mea.com.lb',
     name: 'ABOU RJILY, ZIAD wali',
+    username: 'z.abourjily',
     rank: 'first_officer',
     base: 'BEY',
     qualifications: ['A321']
@@ -135,6 +145,7 @@ const initialProfiles: PilotProfile[] = [
     id: 'julio-id',
     email: 'j.abousaleh@mea.com.lb',
     name: 'ABOU SALEH, JULIO mich',
+    username: 'j.abousaleh',
     rank: 'first_officer',
     base: 'BEY',
     qualifications: ['A321']

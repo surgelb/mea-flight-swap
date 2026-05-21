@@ -13,6 +13,7 @@ create table public.profiles (
     id text primary key,
     email text unique not null,
     name text not null,
+    username text,
     rank text not null check (rank in ('captain', 'first_officer')),
     base text not null default 'BEY',
     qualifications text[] not null default '{}'::text[]
@@ -95,16 +96,16 @@ create policy "Allow all write access to chat_messages" on public.chat_messages 
 -- ==========================================
 
 -- Insert profiles
-insert into public.profiles (id, email, name, rank, base, qualifications) values ('naim-id', 'n.moghabghab@mea.com.lb', 'MOGHABGHAB, NAIM ghassan', 'first_officer', 'BEY', ARRAY['A320', 'A321', 'A32A']);
-insert into public.profiles (id, email, name, rank, base, qualifications) values ('rayan-id', 'r.mroueh@mea.com.lb', 'MROUEH, RAYAN jamal', 'first_officer', 'BEY', ARRAY['A320', 'A321', 'A32A']);
-insert into public.profiles (id, email, name, rank, base, qualifications) values ('shibli-id', 's.awanni@mea.com.lb', 'AWANNI, SHIBLI ri', 'first_officer', 'BEY', ARRAY['A321']);
-insert into public.profiles (id, email, name, rank, base, qualifications) values ('rami-id', 'r.abboud@mea.com.lb', 'ABBOUD, RAMI hassan', 'first_officer', 'BEY', ARRAY['A321']);
-insert into public.profiles (id, email, name, rank, base, qualifications) values ('jamil-id', 'j.abdulmalak@mea.com.lb', 'ABDUL MALAK, JAMIL mah', 'first_officer', 'BEY', ARRAY['A330']);
-insert into public.profiles (id, email, name, rank, base, qualifications) values ('khaled-id', 'k.abijomaa@mea.com.lb', 'ABI JOMAA, KHALED hoss', 'first_officer', 'BEY', ARRAY['A320']);
-insert into public.profiles (id, email, name, rank, base, qualifications) values ('richard-id', 'r.abitorbey@mea.com.lb', 'ABI TOBBY, RICHARD an', 'first_officer', 'BEY', ARRAY['A330']);
-insert into public.profiles (id, email, name, rank, base, qualifications) values ('paul-id', 'p.aboueiwan@mea.com.lb', 'ABOU EIWAN, PAUL edmon', 'first_officer', 'BEY', ARRAY['A330']);
-insert into public.profiles (id, email, name, rank, base, qualifications) values ('ziad-id', 'z.abourjily@mea.com.lb', 'ABOU RJILY, ZIAD wali', 'first_officer', 'BEY', ARRAY['A321']);
-insert into public.profiles (id, email, name, rank, base, qualifications) values ('julio-id', 'j.abousaleh@mea.com.lb', 'ABOU SALEH, JULIO mich', 'first_officer', 'BEY', ARRAY['A321']);
+insert into public.profiles (id, email, name, username, rank, base, qualifications) values ('naim-id', 'n.moghabghab@mea.com.lb', 'MOGHABGHAB, NAIM ghassan', 'n.moghabghab', 'first_officer', 'BEY', ARRAY['A320', 'A321', 'A32A']);
+insert into public.profiles (id, email, name, username, rank, base, qualifications) values ('rayan-id', 'r.mroueh@mea.com.lb', 'MROUEH, RAYAN jamal', 'r.mroueh', 'first_officer', 'BEY', ARRAY['A320', 'A321', 'A32A']);
+insert into public.profiles (id, email, name, username, rank, base, qualifications) values ('shibli-id', 's.awanni@mea.com.lb', 'AWANNI, SHIBLI ri', 's.awanni', 'first_officer', 'BEY', ARRAY['A321']);
+insert into public.profiles (id, email, name, username, rank, base, qualifications) values ('rami-id', 'r.abboud@mea.com.lb', 'ABBOUD, RAMI hassan', 'r.abboud', 'first_officer', 'BEY', ARRAY['A321']);
+insert into public.profiles (id, email, name, username, rank, base, qualifications) values ('jamil-id', 'j.abdulmalak@mea.com.lb', 'ABDUL MALAK, JAMIL mah', 'j.abdulmalak', 'first_officer', 'BEY', ARRAY['A330']);
+insert into public.profiles (id, email, name, username, rank, base, qualifications) values ('khaled-id', 'k.abijomaa@mea.com.lb', 'ABI JOMAA, KHALED hoss', 'k.abijomaa', 'first_officer', 'BEY', ARRAY['A320']);
+insert into public.profiles (id, email, name, username, rank, base, qualifications) values ('richard-id', 'r.abitorbey@mea.com.lb', 'ABI TOBBY, RICHARD an', 'r.abitorbey', 'first_officer', 'BEY', ARRAY['A330']);
+insert into public.profiles (id, email, name, username, rank, base, qualifications) values ('paul-id', 'p.aboueiwan@mea.com.lb', 'ABOU EIWAN, PAUL edmon', 'p.aboueiwan', 'first_officer', 'BEY', ARRAY['A330']);
+insert into public.profiles (id, email, name, username, rank, base, qualifications) values ('ziad-id', 'z.abourjily@mea.com.lb', 'ABOU RJILY, ZIAD wali', 'z.abourjily', 'first_officer', 'BEY', ARRAY['A321']);
+insert into public.profiles (id, email, name, username, rank, base, qualifications) values ('julio-id', 'j.abousaleh@mea.com.lb', 'ABOU SALEH, JULIO mich', 'j.abousaleh', 'first_officer', 'BEY', ARRAY['A321']);
 
 -- Insert flight duties
 insert into public.flight_duties (id, pilot_id, duty_type, flight_number, origin, destination, departure_time, arrival_time, reporting_time, release_time, block_time_mins, aircraft_type, day_number) values ('f-naim-1', 'naim-id', 'flight', 'ME201', 'BEY', 'LHR', '2026-05-01T05:11:00Z', '2026-05-01T10:09:00Z', '2026-05-01T04:11:00Z', '2026-05-01T10:39:00Z', 298, 'A321', 1);

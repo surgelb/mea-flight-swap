@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
+import { PDFParse } from 'pdf-parse';
+// @ts-ignore
+import * as pdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
+
+// Register the worker globally to bypass dynamic import/ESM loader scheme issues on Windows/Next.js
+(globalThis as any).pdfjsWorker = pdfjsWorker;
 
 // Initialize Gemini client if API key is provided
 const apiKey = process.env.GEMINI_API_KEY;
@@ -210,6 +216,31 @@ export async function POST(req: Request) {
     // Actual Gemini parser code
     const fileBytes = await file.arrayBuffer();
     const base64File = Buffer.from(fileBytes).toString('base64');
+    const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+
+    let contentPayload: any[] = [];
+    
+    if (isPDF) {
+      try {
+        const parser = new PDFParse({ data: Buffer.from(fileBytes) });
+        const textResult = await parser.getText();
+        contentPayload = [{ text: `Roster Text Content:\n${textResult.text}` }];
+      } catch (parseError: any) {
+        console.error('[Parse Roster API] pdf-parse error:', parseError);
+        return NextResponse.json({ 
+          error: `Failed to parse PDF document text: ${parseError.message || parseError}` 
+        }, { status: 400 });
+      }
+    } else {
+      contentPayload = [
+        {
+          inlineData: {
+            mimeType: file.type || 'image/png',
+            data: base64File
+          }
+        }
+      ];
+    }
 
     const prompt = `
       You are an expert aviation document parsing assistant.
@@ -270,17 +301,11 @@ export async function POST(req: Request) {
       }
     `;
 
+    contentPayload.push({ text: prompt });
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [
-        {
-          inlineData: {
-            mimeType: file.type || 'application/pdf',
-            data: base64File
-          }
-        },
-        prompt
-      ],
+      contents: contentPayload,
       config: {
         responseMimeType: 'application/json'
       }
