@@ -1,11 +1,7 @@
+import 'pdf-parse/worker';
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { PDFParse } from 'pdf-parse';
-// @ts-ignore
-import * as pdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
-
-// Register the worker globally to bypass dynamic import/ESM loader scheme issues on Windows/Next.js
-(globalThis as any).pdfjsWorker = pdfjsWorker;
 
 // Initialize Gemini client if API key is provided
 const apiKey = process.env.GEMINI_API_KEY;
