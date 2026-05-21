@@ -1,7 +1,6 @@
-import 'pdf-parse/worker';
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
-import { PDFParse } from 'pdf-parse';
+import pdf from 'pdf-parse';
 
 // Initialize Gemini client if API key is provided
 const apiKey = process.env.GEMINI_API_KEY;
@@ -218,8 +217,7 @@ export async function POST(req: Request) {
     
     if (isPDF) {
       try {
-        const parser = new PDFParse({ data: Buffer.from(fileBytes) });
-        const textResult = await parser.getText();
+        const textResult = await pdf(Buffer.from(fileBytes));
         contentPayload = [{ text: `Roster Text Content:\n${textResult.text}` }];
       } catch (parseError: any) {
         console.error('[Parse Roster API] pdf-parse error:', parseError);
