@@ -322,7 +322,12 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
       if (!loggedIn) {
         // Fallback offline Mock Auth
         const profiles = db.getProfiles();
-        const pilot = profiles.find(p => p.username.toLowerCase() === loginIdentifier.toLowerCase() || p.email.toLowerCase() === loginIdentifier.toLowerCase());
+        const pilot = profiles.find(p => {
+          const u = (p?.username || '').toLowerCase();
+          const e = (p?.email || '').toLowerCase();
+          const target = (loginIdentifier || '').toLowerCase();
+          return u === target || e === target;
+        });
         
         if (pilot) {
           if (loginPassword.length < 8) {

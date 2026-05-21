@@ -48,9 +48,11 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
 
   // Filter profiles based on search and qualification filter
   const filteredProfiles = profiles.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.rank.toLowerCase().replace('_', ' ').includes(searchQuery.toLowerCase());
-    const matchesQual = filterQual === 'all' ? true : p.qualifications.includes(filterQual);
+    const name = (p?.name || '').toLowerCase();
+    const rank = (p?.rank || '').toLowerCase().replace('_', ' ');
+    const query = (searchQuery || '').toLowerCase();
+    const matchesSearch = name.includes(query) || rank.includes(query);
+    const matchesQual = filterQual === 'all' ? true : (p?.qualifications || []).includes(filterQual);
     return matchesSearch && matchesQual;
   });
 
