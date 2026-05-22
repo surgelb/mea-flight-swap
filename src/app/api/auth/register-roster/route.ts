@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import pdf from 'pdf-parse';
-
-// Initialize Gemini client if API key is provided
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+import { ai, generateContentWithFallback } from '@/lib/gemini';
 
 export async function POST(req: Request) {
   try {
@@ -64,22 +60,22 @@ export async function POST(req: Request) {
       
       Third, extract all duties for each calendar day (assume May 2026 based on scheduling period if not specified):
       - For flight legs:
-        - duty_type: "flight"
-        - flight_number: (e.g. "ME201")
-        - origin: (3 letter code, e.g. "BEY")
-        - destination: (3 letter code, e.g. "LHR")
-        - departure_time: combine calendar day (e.g. 2026-05-01) and departure time (e.g. 05:11) to UTC ISO string
-        - arrival_time: combine calendar day and arrival time to UTC ISO string
-        - aircraft_type: (e.g. "A321", "A320")
+      - duty_type: "flight"
+      - flight_number: (e.g. "ME201")
+      - origin: (3 letter code, e.g. "BEY")
+      - destination: (3 letter code, e.g. "LHR")
+      - departure_time: combine calendar day (e.g. 2026-05-01) and departure time (e.g. 05:11) to UTC ISO string
+      - arrival_time: combine calendar day and arrival time to UTC ISO string
+      - aircraft_type: (e.g. "A321", "A320")
       - For standby (e.g. "SB"):
-        - duty_type: "standby"
-        - reporting_time: combine day and start time
-        - release_time: combine day and end time
+      - duty_type: "standby"
+      - reporting_time: combine day and start time
+      - release_time: combine day and end time
       - For day off ("X" or "RO" or "Rest"):
-        - duty_type: "off"
+      - duty_type: "off"
       - For training/simulator (e.g. SIM, CRM):
-        - duty_type: "training"
-        - flight_number: description
+      - duty_type: "training"
+      - flight_number: description
       
       CRITICAL DEDUPLICATION RULE:
       The PDF text extracted might repeat information multiple times (e.g. once in the grid and again in a detailed summary list at the bottom). You MUST ensure you DO NOT output duplicate duties.
@@ -87,7 +83,7 @@ export async function POST(req: Request) {
       - If a day contains a flight or simulator/training duty, DO NOT output any standby or day-off ("off") duties for that day.
       - Do not output the exact same flight leg (same flight number, origin, destination, and times) twice.
       - A day can have multiple duties only if they are distinct flight legs (e.g., flight ME201 and ME202 on the same day).
-      Deduplicate all duties thoroughly before returning.
+      - Deduplicate all duties thoroughly before returning.
       
       Return a valid JSON object matching this schema:
       {
@@ -119,16 +115,16 @@ export async function POST(req: Request) {
       }
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
+    const response = await generateContentWithFallback(
+      [
         { text: `Roster Text Content:\n${text}` },
         { text: prompt }
       ],
-      config: {
+      {
         responseMimeType: 'application/json'
       }
-    });
+    );
+
 
     const parsedText = response.text || '{}';
     let result;

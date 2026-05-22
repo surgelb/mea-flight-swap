@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
-
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+import { ai, generateContentWithFallback } from '@/lib/gemini';
 
 interface FlightCheckDuty {
   duty_type: string;
@@ -79,15 +76,13 @@ export async function POST(req: Request) {
       `;
 
       try {
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: prompt
-        });
+        const response = await generateContentWithFallback(prompt);
         explanation = response.text || '';
       } catch (err) {
         console.error('Gemini verification generation failed, using fallback template:', err);
       }
     }
+
 
     // Fallback explanation generator
     if (!explanation) {

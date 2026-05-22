@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import pdf from 'pdf-parse';
-
-// Initialize Gemini client if API key is provided
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+import { ai, generateContentWithFallback } from '@/lib/gemini';
 
 export async function POST(req: Request) {
   try {
@@ -123,13 +119,10 @@ export async function POST(req: Request) {
 
     contentPayload.push({ text: prompt });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: contentPayload,
-      config: {
-        responseMimeType: 'application/json'
-      }
+    const response = await generateContentWithFallback(contentPayload, {
+      responseMimeType: 'application/json'
     });
+
 
     const parsedText = response.text || '{}';
     return NextResponse.json(JSON.parse(parsedText));
