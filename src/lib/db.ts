@@ -469,6 +469,16 @@ const initialSwapRequests: SwapRequest[] = [
   }
 ];
 
+const initialMessages: ChatMessage[] = [
+  {
+    id: 'msg-init-1',
+    room_id: 'room-rayan-naim',
+    sender_id: 'rayan-id',
+    content: "Hey Naim! I saw you offered a swap. Are you open to trading the LHR sector?",
+    created_at: new Date(Date.now() - 3600000).toISOString()
+  }
+];
+
 // Database operations helper
 class DB {
   private isBrowser = typeof window !== 'undefined';
@@ -507,15 +517,7 @@ class DB {
       localStorage.setItem('mfs_flights', JSON.stringify(initialFlights));
       localStorage.setItem('mfs_swaps', JSON.stringify(initialSwapRequests));
       localStorage.setItem('mfs_proposals', JSON.stringify([]));
-      localStorage.setItem('mfs_messages', JSON.stringify([
-        {
-          id: 'msg-init-1',
-          room_id: 'room-rayan-naim',
-          sender_id: 'rayan-id',
-          content: "Hey Naim! I saw you offered a swap. Are you open to trading the LHR sector?",
-          created_at: new Date(Date.now() - 3600000).toISOString()
-        }
-      ]));
+      localStorage.setItem('mfs_messages', JSON.stringify(initialMessages));
     }
     if (!localStorage.getItem('mfs_current_pilot_id')) {
       localStorage.setItem('mfs_current_pilot_id', 'naim-id');
@@ -586,7 +588,16 @@ class DB {
 
   // Profiles
   getProfiles(): PilotProfile[] {
-    return this.get('mfs_profiles', initialProfiles);
+    const stored = this.get<PilotProfile[]>('mfs_profiles', initialProfiles);
+    const mergedMap = new Map<string, PilotProfile>();
+    
+    // First, populate with initialProfiles
+    initialProfiles.forEach(p => mergedMap.set(p.id, p));
+    
+    // Then override/add with stored profiles (which may have been synced from Supabase)
+    stored.forEach(p => mergedMap.set(p.id, p));
+    
+    return Array.from(mergedMap.values());
   }
 
   updateProfile(profile: PilotProfile) {
@@ -608,11 +619,21 @@ class DB {
 
   // Flights
   getFlights(pilotId?: string): FlightDuty[] {
-    const flights = this.get('mfs_flights', initialFlights);
-    if (pilotId) {
-      return flights.filter(f => f.pilot_id === pilotId);
+    const stored = this.get<FlightDuty[]>('mfs_flights', initialFlights);
+    
+    const mergedFlights = [...stored];
+    const storedPilotIds = new Set(stored.map(f => f.pilot_id));
+    
+    for (const f of initialFlights) {
+      if (!storedPilotIds.has(f.pilot_id)) {
+        mergedFlights.push(f);
+      }
     }
-    return flights;
+    
+    if (pilotId) {
+      return mergedFlights.filter(f => f.pilot_id === pilotId);
+    }
+    return mergedFlights;
   }
 
   deduplicateDuties(duties: FlightDuty[]): FlightDuty[] {
@@ -765,7 +786,16 @@ class DB {
 
   // Swap Requests
   getSwapRequests(): SwapRequest[] {
-    return this.get('mfs_swaps', initialSwapRequests);
+    const stored = this.get<SwapRequest[]>('mfs_swaps', initialSwapRequests);
+    const mergedMap = new Map<string, SwapRequest>();
+    
+    // Populate with initialSwapRequests
+    initialSwapRequests.forEach(r => mergedMap.set(r.id, r));
+    
+    // Override/add with stored swap requests
+    stored.forEach(r => mergedMap.set(r.id, r));
+    
+    return Array.from(mergedMap.values());
   }
 
   createSwapRequest(req: Omit<SwapRequest, 'id' | 'created_at' | 'status'>) {
@@ -848,7 +878,14 @@ class DB {
 
   // Messages / Chat
   getMessages(roomId: string): ChatMessage[] {
-    const messages = this.get<ChatMessage[]>('mfs_messages', []);
+    const stored = this.get<ChatMessage[]>('mfs_messages', []);
+    
+    // Merge stored and initialMessages
+    const mergedMap = new Map<string, ChatMessage>();
+    initialMessages.forEach(m => mergedMap.set(m.id, m));
+    stored.forEach(m => mergedMap.set(m.id, m));
+    
+    const messages = Array.from(mergedMap.values());
     return messages.filter(m => m.room_id === roomId).sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }
 
