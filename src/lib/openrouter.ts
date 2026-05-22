@@ -23,7 +23,7 @@ interface GeminiContentPart {
 
 export async function generateContentWithFallback(
   input: string | Array<GeminiContentPart | string>,
-  config?: { responseMimeType?: string }
+  config?: { responseMimeType?: string; maxTokens?: number }
 ) {
   if (!openai) {
     throw new Error('OPENROUTER_API_KEY is not set');
@@ -59,9 +59,10 @@ export async function generateContentWithFallback(
 
   // OpenRouter models to cascade try (defaulting to fast, reliable, JSON-capable options)
   const models = [
-    'google/gemini-1.5-flash',
-    'meta-llama/llama-3-70b-instruct',
-    'google/gemini-2.0-flash-exp',
+    'google/gemini-2.5-flash',
+    'google/gemini-2.0-flash-001',
+    'meta-llama/llama-3.3-70b-instruct',
+    'meta-llama/llama-3.3-70b-instruct:free',
   ];
   let lastError: unknown = null;
 
@@ -73,6 +74,7 @@ export async function generateContentWithFallback(
         model,
         messages,
         response_format: responseFormatJson ? { type: 'json_object' } : undefined,
+        max_tokens: config?.maxTokens || 4000,
       };
 
       const response = await openai.chat.completions.create(completionParams);
