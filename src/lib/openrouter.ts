@@ -6,6 +6,7 @@ export const openai = apiKey
   ? new OpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: apiKey,
+      maxRetries: 0, // Disable automatic SDK retries to allow instant failover to next model
       defaultHeaders: {
         'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
         'X-Title': process.env.NEXT_PUBLIC_SITE_TITLE || 'MEA Flight Swap',
@@ -59,8 +60,10 @@ export async function generateContentWithFallback(
 
   // OpenRouter models to cascade try (only free models to prevent using paid credits)
   const models = [
+    'google/gemma-4-31b-it:free',
+    'google/gemma-4-26b-a4b-it:free',
     'meta-llama/llama-3.3-70b-instruct:free',
-    'deepseek/deepseek-v4-flash:free',
+    'qwen/qwen3-coder:free',
     'meta-llama/llama-3.2-3b-instruct:free',
     'nousresearch/hermes-3-llama-3.1-405b:free',
   ];
@@ -77,7 +80,9 @@ export async function generateContentWithFallback(
         max_tokens: config?.maxTokens || 4000,
       };
 
-      const response = await openai.chat.completions.create(completionParams);
+      const response = await openai.chat.completions.create(completionParams, {
+        timeout: 7000, // 7 seconds timeout per model attempt
+      });
       console.log(`[OpenRouter] Completion successful with model: ${model}`);
       return {
         text: response.choices[0]?.message?.content || '',
