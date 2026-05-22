@@ -80,6 +80,14 @@ export async function POST(req: Request) {
         - duty_type: "training"
         - flight_number: description
       
+      CRITICAL DEDUPLICATION RULE:
+      The PDF text extracted might repeat information multiple times (e.g. once in the grid and again in a detailed summary list at the bottom). You MUST ensure you DO NOT output duplicate duties.
+      - For each calendar day, there should only be one main duty category.
+      - If a day contains a flight or simulator/training duty, DO NOT output any standby or day-off ("off") duties for that day.
+      - Do not output the exact same flight leg (same flight number, origin, destination, and times) twice.
+      - A day can have multiple duties only if they are distinct flight legs (e.g., flight ME201 and ME202 on the same day).
+      Deduplicate all duties thoroughly before returning.
+      
       Return a valid JSON object matching this schema:
       {
         "isValidRoster": boolean,

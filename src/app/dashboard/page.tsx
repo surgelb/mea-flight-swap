@@ -214,12 +214,6 @@ export default function Dashboard() {
     router.push(`/chat/room-rayan-naim`);
   };
 
-  const handleSwitchPilot = () => {
-    const nextId = pilot?.id === 'naim-id' ? 'rayan-id' : 'naim-id';
-    db.setCurrentPilotId(nextId);
-    loadData();
-  };
-
   if (!pilot) return null;
 
   // Calculate pilot duty statistics
@@ -248,9 +242,6 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-          <Button variant="outline" size="sm" onClick={handleSwitchPilot} className="text-xs">
-            Switch Pilot Persona
-          </Button>
           <Button variant="ghost" size="sm" onClick={() => router.push('/')} className="text-xs">
             <LogOut size={14} className="mr-1.5" /> Exit
           </Button>
@@ -390,7 +381,15 @@ export default function Dashboard() {
                     <span className="text-xs text-neutral-500 font-medium">
                       Showing {flights.length} roster duties. Drag new file to replace.
                     </span>
-                    <Button variant="ghost" size="sm" onClick={() => setFlights([])} className="text-xs">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        db.clearFlightsForPilot(pilot.id);
+                        setFlights([]);
+                      }} 
+                      className="text-xs"
+                    >
                       Reset Schedule
                     </Button>
                   </div>

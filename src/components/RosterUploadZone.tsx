@@ -103,10 +103,13 @@ export default function RosterUploadZone({ onUploadSuccess }: RosterUploadZonePr
         throw new Error(data.error);
       }
 
+      const currentPilot = db.getCurrentPilot();
+      const targetPilotId = data.pilot_metadata.id === '18684' ? 'naim-id' : currentPilot.id;
+
       // Standardize duties array, assign appropriate IDs
       const parsedDuties: FlightDuty[] = data.duties.map((duty: any, index: number) => ({
         id: `f-parsed-${Date.now()}-${index}`,
-        pilot_id: data.pilot_metadata.id === '18684' ? 'naim-id' : 'custom-pilot-id',
+        pilot_id: targetPilotId,
         duty_type: duty.duty_type,
         flight_number: duty.flight_number,
         origin: duty.origin || null,
@@ -121,10 +124,9 @@ export default function RosterUploadZone({ onUploadSuccess }: RosterUploadZonePr
       }));
 
       // Update pilot profile with extracted details
-      const currentPilot = db.getCurrentPilot();
       const updatedPilot = {
         ...currentPilot,
-        id: data.pilot_metadata.id === '18684' ? 'naim-id' : currentPilot.id,
+        id: targetPilotId,
         name: data.pilot_metadata.name || currentPilot.name,
         rank: data.pilot_metadata.rank || currentPilot.rank,
         base: data.pilot_metadata.base || currentPilot.base

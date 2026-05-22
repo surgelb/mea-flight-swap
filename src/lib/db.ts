@@ -615,18 +615,151 @@ class DB {
     return flights;
   }
 
-  saveFlights(newFlights: FlightDuty[]) {
+  deduplicateDuties(duties: FlightDuty[]): FlightDuty[] {
+    // Group duties by pilot_id first
+    const dutiesByPilot: { [pilotId: string]: FlightDuty[] } = {};
+    for (const duty of duties) {
+      const pId = duty.pilot_id;
+      if (!dutiesByPilot[pId]) {
+        dutiesByPilot[pId] = [];
+      }
+      dutiesByPilot[pId].push(duty);
+    }
+
+    const finalDuties: FlightDuty[] = [];
+
+    for (const pId in dutiesByPilot) {
+      const pilotDuties = dutiesByPilot[pId];
+      // Group duties by day_number for this pilot
+      const dutiesByDay: { [day: number]: FlightDuty[] } = {};
+      for (const duty of pilotDuties) {
+        const day = duty.day_number;
+        if (!dutiesByDay[day]) {
+          dutiesByDay[day] = [];
+        }
+        dutiesByDay[day].push(duty);
+      }
+
+      for (const dayStr in dutiesByDay) {
+        const day = parseInt(dayStr);
+        const dayDuties = dutiesByDay[day];
+
+        // Filter day duties:
+        // If there is any "flight" or "training" or "simulator" duty, we discard any "off" or "standby" duties for that day.
+        const hasFlightOrTraining = dayDuties.some(d => 
+          d.duty_type === 'flight' || 
+          d.duty_type === 'training' || 
+          d.duty_type === 'simulator'
+        );
+
+        let filtered = dayDuties;
+        if (hasFlightOrTraining) {
+          filtered = dayDuties.filter(d => 
+            d.duty_type === 'flight' || 
+            d.duty_type === 'training' || 
+            d.duty_type === 'simulator'
+          );
+        }
+
+        // Remove exact duplicates
+        const seenKeys = new Set<string>();
+        const uniqueDayDuties: FlightDuty[] = [];
+
+        for (const duty of filtered) {
+          let key = '';
+          if (duty.duty_type === 'flight') {
+            const fNum = (duty.flight_number || '').trim().toUpperCase();
+            const orig = (duty.origin || '').trim().toUpperCase();
+            const dest = (duty.destination || '').trim().toUpperCase();
+            const depTime = (duty.departure_time || '').trim();
+            key = `flight-${fNum}-${orig}-${dest}-${depTime}`;
+          } else if (duty.duty_type === 'standby') {
+            const repTime = (duty.reporting_time || '').trim();
+            const relTime = (duty.release_time || '').trim();
+            key = `standby-${repTime}-${relTime}`;
+          } else if (duty.duty_type === 'off') {
+            key = `off`;
+          } else {
+            const fNum = (duty.flight_number || '').trim().toUpperCase();
+            const depTime = (duty.departure_time || '').trim();
+            key = `${duty.duty_type}-${fNum}-${depTime}`;
+          }
+
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            uniqueDayDuties.push(duty);
+          }
+        }
+
+        finalDuties.push(...uniqueDayDuties);
+      }
+    }
+
+    return finalDuties.sort((a, b) => {
+      if (a.pilot_id !== b.pilot_id) {
+        return a.pilot_id.localeCompare(b.pilot_id);
+      }
+      if (a.day_number !== b.day_number) {
+        return a.day_number - b.day_number;
+      }
+      const aTime = a.departure_time || a.reporting_time || '';
+      const bTime = b.departure_time || b.reporting_time || '';
+      return aTime.localeCompare(bTime);
+    });
+  }
+
+  async saveFlights(newFlights: FlightDuty[]) {
+    const dedupedNewFlights = this.deduplicateDuties(newFlights);
     const flights = this.get('mfs_flights', initialFlights);
     // Remove existing flights for the pilots that we are overwriting
-    const pilotIds = Array.from(new Set(newFlights.map(f => f.pilot_id)));
+    const pilotIds = Array.from(new Set(dedupedNewFlights.map(f => f.pilot_id)));
     const filtered = flights.filter(f => !pilotIds.includes(f.pilot_id));
-    const combined = [...filtered, ...newFlights];
+    const combined = [...filtered, ...dedupedNewFlights];
     this.set('mfs_flights', combined);
 
     if (hasSupabase) {
-      supabase.from('flight_duties').upsert(newFlights).then(({ error }: any) => {
-        if (error) console.error('Supabase write error (flight_duties):', error);
-      });
+      try {
+        // Delete existing flight duties in Supabase first
+        const { error: deleteError } = await supabase
+          .from('flight_duties')
+          .delete()
+          .in('pilot_id', pilotIds);
+
+        if (deleteError) {
+          console.error('Supabase delete error (flight_duties):', deleteError);
+        }
+
+        // Upsert the new flights
+        const { error: upsertError } = await supabase
+          .from('flight_duties')
+          .upsert(dedupedNewFlights);
+
+        if (upsertError) {
+          console.error('Supabase write error (flight_duties):', upsertError);
+        }
+      } catch (err) {
+        console.error('Supabase saveFlights exception:', err);
+      }
+    }
+  }
+
+  async clearFlightsForPilot(pilotId: string) {
+    const flights = this.get('mfs_flights', initialFlights);
+    const filtered = flights.filter(f => f.pilot_id !== pilotId);
+    this.set('mfs_flights', filtered);
+
+    if (hasSupabase) {
+      try {
+        const { error } = await supabase
+          .from('flight_duties')
+          .delete()
+          .eq('pilot_id', pilotId);
+        if (error) {
+          console.error('Supabase delete error (clearFlightsForPilot):', error);
+        }
+      } catch (err) {
+        console.error('Supabase clearFlightsForPilot exception:', err);
+      }
     }
   }
 

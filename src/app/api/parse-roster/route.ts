@@ -70,7 +70,7 @@ export async function POST(req: Request) {
       - qualifications (array of strings, e.g. ["A320", "A321"])
       
       Second, extract all duties for each calendar day:
-      - For flight legs (e.g. "201 \\n 05:11 \\n BEY \\n LHR \\n 10:09 \\n (A321)"):
+      - For flight legs (e.g. "201 \n 05:11 \n BEY \n LHR \n 10:09 \n (A321)"):
         - duty_type: "flight"
         - flight_number: "ME201" (prepend ME to short numbers)
         - origin: "BEY"
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
         - departure_time: combine the calendar day date (assume May 2026 based on header) and departure time (e.g. "05:11")
         - arrival_time: combine the calendar day date and arrival time (e.g. "10:09")
         - aircraft_type: "A321"
-      - For standby (e.g. "SB \\n 12:01 \\n 23:59"):
+      - For standby (e.g. "SB \n 12:01 \n 23:59"):
         - duty_type: "standby"
         - flight_number: null
         - reporting_time: start of standby combined with the calendar date
@@ -88,6 +88,14 @@ export async function POST(req: Request) {
       - For simulator or training duties (from the TRAINING grid at the bottom):
         - duty_type: "training"
         - flight_number: description
+      
+      CRITICAL DEDUPLICATION RULE:
+      The PDF text extracted might repeat information multiple times (e.g. once in the grid and again in a detailed summary list at the bottom). You MUST ensure you DO NOT output duplicate duties.
+      - For each calendar day, there should only be one main duty category.
+      - If a day contains a flight or simulator/training duty, DO NOT output any standby or day-off ("off") duties for that day.
+      - Do not output the exact same flight leg (same flight number, origin, destination, and times) twice.
+      - A day can have multiple duties only if they are distinct flight legs (e.g., flight ME201 and ME202 on the same day).
+      Deduplicate all duties thoroughly before returning.
       
       Return a valid JSON object matching this schema:
       {
