@@ -31,14 +31,14 @@ export default function FlightCard({ duty, showSwapButton = false, onSwapClick }
   const getBadgeColor = () => {
     switch (duty.duty_type) {
       case 'flight':
-        return 'bg-pink-100 text-primary border border-pink-200';
+        return 'bg-primary/10 text-primary border border-primary/20';
       case 'standby':
         return 'bg-amber-100 text-amber-800 border border-amber-200';
       case 'off':
         return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
       case 'training':
       case 'simulator':
-        return 'bg-violet-100 text-cta border border-violet-200';
+        return 'bg-cta/10 text-cta border border-cta/20';
       default:
         return 'bg-neutral-100 text-neutral-800';
     }
@@ -49,16 +49,11 @@ export default function FlightCard({ duty, showSwapButton = false, onSwapClick }
     return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  const formatDate = (isoString: string | null) => {
-    if (!isoString) return '';
-    return new Date(isoString).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
-  };
-
   return (
     <Card className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-4 px-5">
       <div className="flex items-center gap-4">
         {/* Timing Column */}
-        <div className="flex flex-col items-center justify-center bg-amber-50 border border-amber-200/40 rounded-xl px-3 py-2 min-w-[70px]">
+        <div className="flex flex-col items-center justify-center bg-neutral-50 border border-border/60 rounded-xl px-3 py-2 min-w-[70px]">
           <span className="text-xs text-neutral-500 font-medium">May</span>
           <span className="text-2xl font-heading font-bold text-neutral-800 leading-none mt-0.5">
             {duty.day_number}
@@ -132,7 +127,7 @@ export default function FlightCard({ duty, showSwapButton = false, onSwapClick }
         {showSwapButton && onSwapClick && duty.duty_type !== 'off' && (
           <button
             onClick={() => onSwapClick(duty)}
-            className="px-4 py-2 text-xs font-heading font-semibold rounded-xl bg-cta text-white hover:bg-violet-600 transition-all glow-cta cursor-pointer"
+            className="px-4 py-2 text-xs font-heading font-semibold rounded-xl bg-cta text-white hover:bg-cta-hover transition-all glow-cta cursor-pointer"
           >
             Post Swap
           </button>

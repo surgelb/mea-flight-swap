@@ -104,8 +104,9 @@ export async function POST(req: Request) {
       rest_violation: restViolation
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error verifying swap legality:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -4,10 +4,10 @@ import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import Button from './ui/Button';
-import { db, FlightDuty } from '@/lib/db';
+import { db, FlightDuty, PilotProfile } from '@/lib/db';
 
 interface RosterUploadZoneProps {
-  onUploadSuccess: (pilotMetadata: any) => void;
+  onUploadSuccess: (pilotMetadata: PilotProfile) => void;
 }
 
 const PARSING_STEPS = [
@@ -24,7 +24,6 @@ export default function RosterUploadZone({ onUploadSuccess }: RosterUploadZonePr
   const [status, setStatus] = useState<'idle' | 'uploading' | 'parsing' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [fileName, setFileName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -59,7 +58,6 @@ export default function RosterUploadZone({ onUploadSuccess }: RosterUploadZonePr
   };
 
   const processFile = async (file: File) => {
-    setFileName(file.name);
     setStatus('uploading');
     setErrorMessage('');
     setCurrentStepIndex(0);
@@ -104,34 +102,45 @@ export default function RosterUploadZone({ onUploadSuccess }: RosterUploadZonePr
       }
 
       const currentPilot = db.getCurrentPilot();
-      const targetPilotId = data.pilot_metadata.id === '18684' ? 'naim-id' : currentPilot.id;
+      const targetPilotId = currentPilot?.id || data.pilot_metadata.id || `pilot-${Math.random().toString(36).substr(2, 9)}`;
 
       // Standardize duties array, assign appropriate IDs
-      const parsedDuties: FlightDuty[] = data.duties.map((duty: any, index: number) => ({
-        id: `f-parsed-${Date.now()}-${index}`,
-        pilot_id: targetPilotId,
-        duty_type: duty.duty_type,
-        flight_number: duty.flight_number,
-        origin: duty.origin || null,
-        destination: duty.destination || null,
-        departure_time: duty.departure_time || null,
-        arrival_time: duty.arrival_time || null,
-        reporting_time: duty.reporting_time || (duty.departure_time ? new Date(new Date(duty.departure_time).getTime() - 60 * 60 * 1000).toISOString() : null),
-        release_time: duty.release_time || (duty.arrival_time ? new Date(new Date(duty.arrival_time).getTime() + 30 * 60 * 1000).toISOString() : null),
-        block_time_mins: duty.block_time_mins || null,
-        aircraft_type: duty.aircraft_type || null,
-        day_number: duty.day_number || new Date(duty.departure_time).getDate()
-      }));
+      const parsedDuties: FlightDuty[] = data.duties.map((duty: Partial<FlightDuty>, index: number) => {
+        const depTime = duty.departure_time || null;
+        const arrTime = duty.arrival_time || null;
+        const repTime = duty.reporting_time || (depTime ? new Date(new Date(depTime).getTime() - 60 * 60 * 1000).toISOString() : null);
+        const relTime = duty.release_time || (arrTime ? new Date(new Date(arrTime).getTime() + 30 * 60 * 1000).toISOString() : null);
+        const dayNumber = duty.day_number || (depTime ? new Date(depTime).getDate() : 1);
+
+        return {
+          id: `f-parsed-${Date.now()}-${index}`,
+          pilot_id: targetPilotId,
+          duty_type: duty.duty_type || 'off',
+          flight_number: duty.flight_number || null,
+          origin: duty.origin || null,
+          destination: duty.destination || null,
+          departure_time: depTime,
+          arrival_time: arrTime,
+          reporting_time: repTime,
+          release_time: relTime,
+          block_time_mins: duty.block_time_mins || null,
+          aircraft_type: duty.aircraft_type || null,
+          day_number: dayNumber
+        };
+      });
 
       // Update pilot profile with extracted details
       const updatedPilot = {
-        ...currentPilot,
         id: targetPilotId,
-        name: data.pilot_metadata.name || currentPilot.name,
-        rank: data.pilot_metadata.rank || currentPilot.rank,
-        base: data.pilot_metadata.base || currentPilot.base
+        email: currentPilot?.email || `${targetPilotId}@mea.com.lb`,
+        username: currentPilot?.username || (data.pilot_metadata.name || 'crew').toLowerCase().replace(/[^a-z0-9]/g, ''),
+        name: data.pilot_metadata.name || currentPilot?.name || 'MEA Crew Member',
+        rank: data.pilot_metadata.rank || currentPilot?.rank || 'first_officer',
+        base: data.pilot_metadata.base || currentPilot?.base || 'BEY',
+        qualifications: currentPilot?.qualifications || ['A320', 'A330']
       };
 
+      db.setCurrentPilotId(targetPilotId);
       db.updateProfile(updatedPilot);
       db.saveFlights(parsedDuties);
       
@@ -141,10 +150,11 @@ export default function RosterUploadZone({ onUploadSuccess }: RosterUploadZonePr
         setStatus('idle');
       }, 1500);
 
-    } catch (err: any) {
+    } catch (err) {
       if (stepInterval!) clearInterval(stepInterval);
       setStatus('error');
-      setErrorMessage(err.message || 'An error occurred during schedule processing.');
+      const message = err instanceof Error ? err.message : 'An error occurred during schedule processing.';
+      setErrorMessage(message);
     }
   };
 
@@ -173,8 +183,8 @@ export default function RosterUploadZone({ onUploadSuccess }: RosterUploadZonePr
               onClick={triggerFileInput}
               className={`border-2 border-dashed rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
                 dragActive 
-                  ? 'border-primary bg-pink-500/10 shadow-lg shadow-pink-500/10 scale-[1.01]' 
-                  : 'border-amber-300 hover:border-primary hover:bg-pink-500/5 bg-white/40 backdrop-blur-md'
+                  ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10 scale-[1.01]' 
+                  : 'border-neutral-300 hover:border-primary hover:bg-primary/5 bg-white/40 backdrop-blur-md'
               }`}
               onDragOver={handleDrag}
               onDragLeave={handleDrag}
@@ -183,7 +193,7 @@ export default function RosterUploadZone({ onUploadSuccess }: RosterUploadZonePr
               <motion.div
                 animate={{ y: [0, -6, 0] }}
                 transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
-                className="w-16 h-16 bg-pink-100 rounded-2xl flex items-center justify-center text-primary mb-4"
+                className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-4"
               >
                 <UploadCloud size={32} />
               </motion.div>
@@ -205,13 +215,13 @@ export default function RosterUploadZone({ onUploadSuccess }: RosterUploadZonePr
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="border border-amber-200 bg-white/80 backdrop-blur-md rounded-3xl p-8 flex flex-col items-center justify-center min-h-[220px]"
+              className="border border-border bg-white/80 backdrop-blur-md rounded-3xl p-8 flex flex-col items-center justify-center min-h-[220px]"
             >
               <Loader className="animate-spin text-cta mb-4" size={36} />
               <h4 className="text-lg font-heading font-semibold text-neutral-800 mb-2">
                 {status === 'uploading' ? 'Uploading file...' : 'Gemini AI Parsing...'}
               </h4>
-              <div className="w-full max-w-xs bg-amber-100 h-1.5 rounded-full overflow-hidden mb-4">
+              <div className="w-full max-w-xs bg-cta/10 h-1.5 rounded-full overflow-hidden mb-4">
                 <motion.div
                   className="bg-cta h-full"
                   initial={{ width: "0%" }}

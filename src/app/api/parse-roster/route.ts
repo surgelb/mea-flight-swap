@@ -30,16 +30,17 @@ export async function POST(req: Request) {
     const base64File = Buffer.from(fileBytes).toString('base64');
     const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
 
-    let contentPayload: any[] = [];
+    let contentPayload: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
     
     if (isPDF) {
       try {
         const textResult = await pdf(Buffer.from(fileBytes));
         contentPayload = [{ text: `Roster Text Content:\n${textResult.text}` }];
-      } catch (parseError: any) {
+      } catch (parseError) {
         console.error('[Parse Roster API] pdf-parse error:', parseError);
+        const message = parseError instanceof Error ? parseError.message : String(parseError);
         return NextResponse.json({ 
-          error: `Failed to parse PDF document text: ${parseError.message || parseError}` 
+          error: `Failed to parse PDF document text: ${message}` 
         }, { status: 400 });
       }
     } else {
@@ -133,8 +134,9 @@ export async function POST(req: Request) {
     const parsedText = response.text || '{}';
     return NextResponse.json(JSON.parse(parsedText));
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in parse-roster API:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

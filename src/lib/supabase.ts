@@ -6,11 +6,11 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 // Export standard Supabase client. If keys are missing, return a dummy object that fails gracefully.
 export const supabase = supabaseUrl && supabaseAnonKey 
   ? createClient(supabaseUrl, supabaseAnonKey) 
-  : new Proxy({} as any, {
+  : (new Proxy({}, {
       get: () => {
         console.warn('Supabase env variables are missing. Operating in mock fallback mode.');
         return () => Promise.resolve({ data: null, error: new Error('Supabase client not initialized') });
       }
-    });
+    }) as unknown as ReturnType<typeof createClient>);
 
 export const hasSupabase = Boolean(supabaseUrl && supabaseAnonKey);

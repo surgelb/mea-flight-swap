@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRightLeft, User, Calendar, MessageSquare, ShieldCheck, ShieldAlert, Loader } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ArrowRightLeft, User, ShieldCheck, ShieldAlert, Loader } from 'lucide-react';
 import { db, SwapRequest, FlightDuty, PilotProfile } from '@/lib/db';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -29,13 +29,16 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
   const [allFlights, setAllFlights] = useState<FlightDuty[]>([]);
 
   useEffect(() => {
-    // Load initial listings
-    setRequests(db.getSwapRequests().filter(r => r.status === 'open'));
-    setProfiles(db.getProfiles());
-    setAllFlights(db.getFlights());
-    
-    const myId = db.getCurrentPilotId();
-    setMyFlights(db.getFlights(myId));
+    // Load initial listings asynchronously to avoid cascading renders warning
+    const timer = setTimeout(() => {
+      setRequests(db.getSwapRequests().filter(r => r.status === 'open'));
+      setProfiles(db.getProfiles());
+      setAllFlights(db.getFlights());
+      
+      const myId = db.getCurrentPilotId();
+      setMyFlights(db.getFlights(myId));
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const getPilotInfo = (pilotId: string) => {
@@ -78,7 +81,7 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
         passed: data.legality_check_passed,
         notes: data.legality_notes
       });
-    } catch (err) {
+    } catch {
       // Local fallback in case of errors
       setLegalityResult({
         passed: true,
@@ -93,6 +96,7 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
     if (!selectedRequest || !selectedMyFlight || !legalityResult) return;
 
     const myId = db.getCurrentPilotId();
+    if (!myId) return;
 
     const proposal = db.createProposal({
       request_id: selectedRequest.id,
@@ -139,7 +143,7 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
                   <div className="flex-1 space-y-3">
                     {/* Header: Pilot name and Rank */}
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center text-primary">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                         <User size={16} />
                       </div>
                       <div>
@@ -153,7 +157,7 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
                     </div>
 
                     {/* Flight Detail */}
-                    <div className="p-3 bg-amber-50/50 border border-amber-200/30 rounded-xl flex items-center gap-4">
+                    <div className="p-3 bg-neutral-50 border border-border rounded-xl flex items-center gap-4">
                       <div className="bg-primary/10 text-primary p-2.5 rounded-lg">
                         <ArrowRightLeft size={18} />
                       </div>
@@ -182,7 +186,7 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
                       </p>
                       {req.notes && (
                         <p className="italic text-neutral-500">
-                          "{req.notes}"
+                          &ldquo;{req.notes}&rdquo;
                         </p>
                       )}
                     </div>
@@ -202,7 +206,7 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
                         Propose Trade
                       </Button>
                     ) : (
-                      <span className="text-xs font-semibold text-primary px-3 py-1 bg-pink-100 rounded-full">
+                      <span className="text-xs font-semibold text-primary px-3 py-1 bg-primary/10 rounded-full">
                         Your Post
                       </span>
                     )}
@@ -227,7 +231,7 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
               <p className="text-sm font-semibold text-neutral-700">
                 {getPilotInfo(selectedRequest.pilot_id)?.name}
               </p>
-              <div className="mt-2 p-3 bg-amber-50 rounded-xl border border-amber-200/30 text-xs">
+              <div className="mt-2 p-3 bg-neutral-50 rounded-xl border border-border text-xs">
                 <strong>Their flight:</strong> {getFlightInfo(selectedRequest.flight_id)?.flight_number} (
                 {getFlightInfo(selectedRequest.flight_id)?.origin} → {getFlightInfo(selectedRequest.flight_id)?.destination}) on May {getFlightInfo(selectedRequest.flight_id)?.day_number}
               </div>
@@ -245,8 +249,8 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
                     onClick={() => handleSelectMyFlight(f)}
                     className={`w-full text-left p-3 rounded-xl border text-xs transition-all flex justify-between items-center cursor-pointer ${
                       selectedMyFlight?.id === f.id
-                        ? 'border-primary bg-pink-500/5 shadow-md shadow-pink-500/5'
-                        : 'border-amber-200/40 hover:border-primary bg-white/40'
+                        ? 'border-primary bg-primary/5 shadow-md shadow-primary/5'
+                        : 'border-border hover:border-primary bg-white/40'
                     }`}
                   >
                     <div>
@@ -274,7 +278,7 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
 
             {/* Legality Validation Status */}
             {(checkingLegality || legalityResult) && (
-              <div className="p-4 rounded-2xl bg-white border border-amber-200/60 shadow-inner">
+              <div className="p-4 rounded-2xl bg-white border border-border shadow-inner">
                 <span className="text-xs text-neutral-400 uppercase font-semibold block mb-2">
                   Gemini FTL Legality Assessment
                 </span>

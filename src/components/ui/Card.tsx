@@ -16,23 +16,24 @@ export default function Card({
   hoverEffect = true,
   onClick
 }: CardProps) {
-  const CardComponent = onClick ? motion.div : 'div';
-  const interactionProps = onClick 
-    ? {
-        whileHover: { y: -4, scale: 1.01 },
-        whileTap: { scale: 0.99 },
-        onClick,
-        className: `cursor-pointer ${className}`
-      }
-    : { className };
+  if (onClick) {
+    return (
+      <motion.div
+        whileHover={{ y: -4, scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        onClick={onClick}
+        className={`bg-white/70 backdrop-blur-md border border-border rounded-2xl p-6 shadow-md shadow-neutral-900/5 glow-card ${hoverEffect ? 'hover:shadow-lg' : ''} cursor-pointer ${className}`}
+      >
+        {children}
+      </motion.div>
+    );
+  }
 
   return (
-    // @ts-ignore
-    <CardComponent
-      {...interactionProps}
-      className={`bg-white/70 backdrop-blur-md border border-amber-200/50 rounded-2xl p-6 shadow-md shadow-amber-900/5 glow-card ${hoverEffect ? 'hover:shadow-lg' : ''} ${className}`}
+    <div
+      className={`bg-white/70 backdrop-blur-md border border-border rounded-2xl p-6 shadow-md shadow-neutral-900/5 glow-card ${hoverEffect ? 'hover:shadow-lg' : ''} ${className}`}
     >
       {children}
-    </CardComponent>
+    </div>
   );
 }

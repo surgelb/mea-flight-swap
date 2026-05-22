@@ -24,10 +24,11 @@ export async function POST(req: Request) {
       
       const textResult = await pdf(Buffer.from(fileBytes));
       text = textResult.text;
-    } catch (parseError: any) {
+    } catch (parseError) {
       console.error('[Register Roster API] pdf-parse error:', parseError);
+      const message = parseError instanceof Error ? parseError.message : String(parseError);
       return NextResponse.json({ 
-        error: `Failed to extract text from the PDF: ${parseError.message || parseError}` 
+        error: `Failed to extract text from the PDF: ${message}` 
       }, { status: 400 });
     }
 
@@ -133,7 +134,7 @@ export async function POST(req: Request) {
     let result;
     try {
       result = JSON.parse(parsedText);
-    } catch (jsonErr) {
+    } catch {
       console.error('[Register Roster API] Failed to parse Gemini JSON response:', parsedText);
       return NextResponse.json({ error: 'Failed to interpret parser results. Please try again.' }, { status: 500 });
     }
@@ -172,8 +173,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json(result);
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Register Roster API] Exception:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

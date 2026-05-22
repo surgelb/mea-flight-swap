@@ -1,40 +1,82 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #EC4899;
-  --color-cta: #8B5CF6;
-  --color-cream: #FEF3C7;
+  /* Tailwind v4 Configuration mapped from HSL variables */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-hover: hsl(var(--primary-hover));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-hover: hsl(var(--secondary-hover));
+  --color-cta: hsl(var(--secondary)); /* Cedar Teal is Secondary & CTA */
+  --color-cta-hover: hsl(var(--secondary-hover));
   
-  --font-sans: var(--font-open-sans), system-ui, sans-serif;
-  --font-heading: var(--font-poppins), system-ui, sans-serif;
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-heading: var(--font-inter), system-ui, sans-serif;
 }
 
 :root {
-  --background: #FEF3C7;
-  --foreground: #0f172a;
+  /* Shadcn UI HSL Mappings for MEA Brand */
+  --background: 0 0% 96%;            /* #F6F6F6 (Wild Sand) */
+  --foreground: 199 94% 6%;          /* #01151E (Blue Charcoal) */
+
+  --card: 0 0% 100%;                 /* Pure White card backgrounds */
+  --card-foreground: 199 94% 6%;     /* #01151E */
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 199 94% 6%;
+
+  --primary: 346 86% 44%;            /* #CF0F3D (MEA Crimson) */
+  --primary-foreground: 0 0% 100%;   /* White */
+  --primary-hover: 346 86% 37%;      /* #B00D34 */
+
+  --secondary: 164 94% 25%;          /* #047C5C (Cedar Teal) */
+  --secondary-foreground: 0 0% 100%; /* White */
+  --secondary-hover: 164 94% 20%;    /* #03644A */
+
+  --muted: 0 0% 90%;
+  --muted-foreground: 199 20% 45%;
+
+  --accent: 164 94% 25%;             /* Cedar Teal */
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 346 86% 44%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 0 0% 96%;                /* #F6F6F6 (Wild Sand) */
+  --input: 0 0% 96%;
+  --ring: 346 86% 44%;               /* MEA Crimson */
+
+  --radius: 0.75rem;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-open-sans), system-ui, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-poppins), system-ui, sans-serif;
+  font-family: var(--font-heading);
   font-weight: 600;
 }
 
-/* Luminous Glow Custom Animations and Effects */
+/* Luminous Glow Custom Animations and Effects using MEA Brand Palette */
 .glow-primary {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glow-primary:hover {
-  box-shadow: 0 0 15px rgba(236, 72, 153, 0.45);
-  border-color: #EC4899;
+  box-shadow: 0 0 15px rgba(207, 15, 61, 0.45);
+  border-color: #CF0F3D;
 }
 
 .glow-cta {
@@ -42,8 +84,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .glow-cta:hover {
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
-  border-color: #8B5CF6;
+  box-shadow: 0 0 20px rgba(4, 124, 92, 0.5);
+  border-color: #047C5C;
 }
 
 .glow-card {
@@ -51,7 +93,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .glow-card:hover {
-  box-shadow: 0 10px 25px -5px rgba(139, 92, 246, 0.15), 0 0 15px rgba(236, 72, 153, 0.15);
+  box-shadow: 0 10px 25px -5px rgba(4, 124, 92, 0.15), 0 0 15px rgba(207, 15, 61, 0.15);
 }
 
 /* Custom Scrollbar for sleek Minimal UX */
@@ -61,14 +103,15 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(236, 72, 153, 0.05);
+  background: rgba(4, 124, 92, 0.05);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(139, 92, 246, 0.3);
+  background: rgba(207, 15, 61, 0.3);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 92, 246, 0.5);
+  background: rgba(207, 15, 61, 0.5);
 }
+

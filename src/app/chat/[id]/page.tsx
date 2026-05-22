@@ -3,15 +3,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Send, ArrowLeft, ArrowRightLeft, User, ShieldCheck, ShieldAlert, CheckCircle } from 'lucide-react';
-import { db, PilotProfile, FlightDuty, SwapProposal, SwapRequest, ChatMessage } from '@/lib/db';
-import Button from '@/components/ui/Button';
+import { Send, ArrowLeft, ArrowRightLeft, ShieldCheck, ShieldAlert, CheckCircle } from 'lucide-react';
+import { db, PilotProfile, FlightDuty, SwapProposal, ChatMessage } from '@/lib/db';
 import Card from '@/components/ui/Card';
 
 export default function ChatRoom() {
   const params = useParams();
   const router = useRouter();
-  const roomId = (params.id as string) || 'room-rayan-naim';
+  const roomId = (params.id as string) || '';
   
   const [currentPilot, setCurrentPilot] = useState<PilotProfile | null>(null);
   const [partnerPilot, setPartnerPilot] = useState<PilotProfile | null>(null);
@@ -26,61 +25,112 @@ export default function ChatRoom() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Parse room ID room-id1--id2 dynamically
+  const parseRoomIds = (idStr: string): { id1: string; id2: string } | null => {
+    if (!idStr.startsWith('room-')) return null;
+    const body = idStr.substring(5);
+    if (body.includes('--')) {
+      const parts = body.split('--');
+      if (parts.length === 2) {
+        return { id1: parts[0], id2: parts[1] };
+      }
+    }
+    // Fallback for legacy formats
+    const profiles = db.getProfiles();
+    for (const p of profiles) {
+      if (body.startsWith(p.id + '-')) {
+        const otherId = body.substring(p.id.length + 1);
+        return { id1: p.id, id2: otherId };
+      }
+    }
+    const lastHyphen = body.lastIndexOf('-');
+    if (lastHyphen !== -1) {
+      return { id1: body.substring(0, lastHyphen), id2: body.substring(lastHyphen + 1) };
+    }
+    return null;
+  };
+
+  function loadMessages() {
+    setMessages(db.getMessages(roomId));
+  }
+
+  function loadData() {
+    const me = db.getCurrentPilot();
+    if (!me) {
+      router.push('/');
+      return;
+    }
+    setCurrentPilot(me);
+
+    const roomInfo = parseRoomIds(roomId);
+    if (!roomInfo) {
+      router.push('/dashboard');
+      return;
+    }
+
+    const { id1, id2 } = roomInfo;
+    const partnerId = me.id === id1 ? id2 : id1;
+    const partner = db.getProfiles().find(p => p.id === partnerId);
+    if (!partner) {
+      router.push('/dashboard');
+      return;
+    }
+    setPartnerPilot(partner);
+
+    // Find the swap proposal matching this room context
+    const proposals = db.getProposals();
+    const requests = db.getSwapRequests();
+    
+    const activeProp = proposals.find(p => {
+      const req = requests.find(r => r.id === p.request_id);
+      if (!req) return false;
+      return (
+        (p.proposer_id === me.id && req.pilot_id === partnerId) ||
+        (p.proposer_id === partnerId && req.pilot_id === me.id)
+      );
+    });
+
+    if (!activeProp) {
+      router.push('/dashboard');
+      return;
+    }
+    
+    setProposal(activeProp);
+
+    // Get flights being traded
+    const flights = db.getFlights();
+    const req = requests.find(r => r.id === activeProp.request_id);
+    
+    if (me.id === activeProp.proposer_id) {
+      // I am the proposer
+      setMyFlight(flights.find(f => f.id === activeProp.proposed_flight_id) || null);
+      setPartnerFlight(flights.find(f => f.id === req?.flight_id) || null);
+    } else {
+      // I am the receiver
+      setMyFlight(flights.find(f => f.id === req?.flight_id) || null);
+      setPartnerFlight(flights.find(f => f.id === activeProp.proposed_flight_id) || null);
+    }
+
+    loadMessages();
+  }
+
   useEffect(() => {
-    loadData();
+    const timer = setTimeout(() => {
+      loadData();
+    }, 0);
     // Periodically poll for live feeling
     const interval = setInterval(loadMessages, 1500);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
   useEffect(() => {
     // Scroll to bottom when messages update
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  const loadData = () => {
-    const me = db.getCurrentPilot();
-    setCurrentPilot(me);
-
-    // Find the swap proposal matching this room context
-    const proposals = db.getProposals();
-    const activeProp = proposals[0] || {
-      id: 'prop-default',
-      request_id: 'req-rayan-1',
-      proposer_id: 'naim-id',
-      proposed_flight_id: 'f-naim-1',
-      status: 'pending',
-      legality_check_passed: true,
-      legality_notes: "Swap verification computed successfully. Gaps comply with safety guidelines."
-    };
-    
-    setProposal(activeProp as SwapProposal);
-
-    // Get partner info
-    const partnerId = me.id === 'naim-id' ? 'rayan-id' : 'naim-id';
-    const partner = db.getProfiles().find(p => p.id === partnerId);
-    setPartnerPilot(partner || null);
-
-    // Get flights being traded
-    const flights = db.getFlights();
-    const req = db.getSwapRequests().find(r => r.id === activeProp.request_id);
-    
-    if (me.id === 'naim-id') {
-      // I am the proposer (Naim)
-      setMyFlight(flights.find(f => f.id === activeProp.proposed_flight_id) || null);
-      setPartnerFlight(flights.find(f => f.id === req?.flight_id) || null);
-    } else {
-      // I am the receiver (Rayan)
-      setMyFlight(flights.find(f => f.id === req?.flight_id) || null);
-      setPartnerFlight(flights.find(f => f.id === activeProp.proposed_flight_id) || null);
-    }
-
-    loadMessages();
-  };
-
-  const loadMessages = () => {
-    setMessages(db.getMessages(roomId));
-  };
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,7 +171,7 @@ export default function ChatRoom() {
   return (
     <div className="flex-1 flex flex-col max-w-4xl w-full mx-auto p-4 md:p-6 space-y-4">
       {/* Header panel */}
-      <div className="flex items-center justify-between border-b border-amber-200/50 pb-3">
+      <div className="flex items-center justify-between border-b border-border pb-3">
         <button
           onClick={() => router.push('/dashboard')}
           className="flex items-center gap-2 text-xs font-heading font-bold text-neutral-500 hover:text-neutral-800 transition-colors cursor-pointer"
@@ -135,7 +185,7 @@ export default function ChatRoom() {
 
       {/* Roster Swap Summary bar */}
       {myFlight && partnerFlight && (
-        <Card hoverEffect={false} className="border-amber-200 bg-white/70 py-4 px-5">
+        <Card hoverEffect={false} className="border-border bg-white/70 py-4 px-5">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <div className="flex items-center gap-1.5 font-bold text-neutral-800">
@@ -150,7 +200,7 @@ export default function ChatRoom() {
             </div>
 
             {/* Legality indicator */}
-            <div className="flex items-center gap-2 border-l border-amber-200/50 md:pl-4 py-1">
+            <div className="flex items-center gap-2 border-l border-border md:pl-4 py-1">
               {proposal?.legality_check_passed ? (
                 <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold bg-emerald-100/50 px-2.5 py-1 rounded-lg">
                   <ShieldCheck size={14} /> FTL Compliant
@@ -164,7 +214,7 @@ export default function ChatRoom() {
               {proposal?.status !== 'accepted' ? (
                 <button
                   onClick={handleApproveSwapClick}
-                  className="px-3.5 py-1.5 bg-cta text-white text-xs font-heading font-bold rounded-lg hover:bg-violet-600 glow-cta transition-colors cursor-pointer"
+                  className="px-3.5 py-1.5 bg-cta text-white text-xs font-heading font-bold rounded-lg hover:bg-cta-hover glow-cta transition-colors cursor-pointer"
                 >
                   Approve Swap
                 </button>
@@ -179,9 +229,9 @@ export default function ChatRoom() {
       )}
 
       {/* Chat Area */}
-      <Card hoverEffect={false} className="flex-1 flex flex-col min-h-[400px] p-0 overflow-hidden border-amber-200/40">
+      <Card hoverEffect={false} className="flex-1 flex flex-col min-h-[400px] p-0 overflow-hidden border-border/80">
         {/* Coordinating header */}
-        <div className="bg-amber-50/70 border-b border-amber-200/30 px-5 py-3 flex items-center justify-between">
+        <div className="bg-background/80 border-b border-border px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-neutral-200 rounded-full flex items-center justify-center text-neutral-600 font-semibold text-xs">
               {partnerPilot.name[0]}
@@ -209,13 +259,13 @@ export default function ChatRoom() {
                   className={`max-w-xs md:max-w-md rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
                     isMe
                       ? 'bg-primary text-white rounded-tr-none'
-                      : 'bg-white border border-amber-200/50 text-neutral-800 rounded-tl-none'
+                      : 'bg-white border border-border text-neutral-800 rounded-tl-none'
                   }`}
                 >
                   <p className="leading-relaxed font-sans">{msg.content}</p>
                   <span
                     className={`text-[9px] block text-right mt-1 ${
-                      isMe ? 'text-pink-100' : 'text-neutral-400'
+                      isMe ? 'text-white/90' : 'text-neutral-400'
                     }`}
                   >
                     {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
@@ -228,18 +278,18 @@ export default function ChatRoom() {
         </div>
 
         {/* Message Input form */}
-        <form onSubmit={handleSendMessage} className="p-4 border-t border-amber-200/30 bg-amber-50/20 flex gap-3">
+        <form onSubmit={handleSendMessage} className="p-4 border-t border-border bg-background/20 flex gap-3">
           <input
             type="text"
             placeholder={`Reply to ${partnerPilot.name.split(',')[0]}...`}
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
-            className="flex-1 px-4 py-2.5 rounded-xl border border-amber-200 bg-white focus:outline-none focus:border-primary text-sm focus:ring-1 focus:ring-primary"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-white focus:outline-none focus:border-primary text-sm focus:ring-1 focus:ring-primary"
           />
           <button
             type="submit"
             disabled={!inputValue.trim()}
-            className="p-3 rounded-xl bg-primary text-white hover:bg-pink-600 disabled:opacity-40 transition-colors flex items-center justify-center glow-primary cursor-pointer"
+            className="p-3 rounded-xl bg-primary text-white hover:bg-primary-hover disabled:opacity-40 transition-colors flex items-center justify-center glow-primary cursor-pointer"
           >
             <Send size={16} />
           </button>

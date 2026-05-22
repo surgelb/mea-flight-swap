@@ -32,7 +32,6 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
   const [status, setStatus] = useState<'idle' | 'uploading' | 'parsing' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [fileName, setFileName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Parsed metadata from Screen 1 to pass to Screen 2
@@ -48,7 +47,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
       username: string;
       email: string;
     };
-    duties: any[];
+    duties: Partial<FlightDuty>[];
   } | null>(null);
 
   // Screen 2 (Signup Form) State
@@ -66,11 +65,28 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
 
+  const handleReset = () => {
+    setStep(1);
+    setStatus('idle');
+    setErrorMessage('');
+    setParsedData(null);
+    setPassword('');
+    setConfirmPassword('');
+    setFormError('');
+    setLoginIdentifier('');
+    setLoginPassword('');
+    setLoginError('');
+    setIsLoggingIn(false);
+  };
+
   // Sync mode state when the modal opens with a specific mode
   useEffect(() => {
     if (isOpen) {
-      setMode(initialMode);
-      handleReset();
+      const timer = setTimeout(() => {
+        setMode(initialMode);
+        handleReset();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen, initialMode]);
 
@@ -113,7 +129,6 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
       return;
     }
 
-    setFileName(file.name);
     setStatus('uploading');
     setErrorMessage('');
     setCurrentStepIndex(0);
@@ -161,10 +176,11 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
         setStep(2);
       }, 1200);
 
-    } catch (err: any) {
+    } catch (err) {
       if (stepInterval!) clearInterval(stepInterval);
       setStatus('error');
-      setErrorMessage(err.message || 'An error occurred during schedule processing.');
+      const errMsg = err instanceof Error ? err.message : 'An error occurred during schedule processing.';
+      setErrorMessage(errMsg);
     }
   };
 
@@ -227,6 +243,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
       };
 
       // 2. Map duties to local/Postgres DB schema
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const parsedDuties: FlightDuty[] = parsedData.duties.map((duty: any, index: number) => ({
         id: `f-parsed-${finalPilotId}-${index}-${Date.now()}`,
         pilot_id: finalPilotId,
@@ -252,9 +269,10 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
       setIsSubmitting(false);
       onClose();
       router.push('/dashboard');
-    } catch (err: any) {
+    } catch (err) {
       console.error('[Register Password Form] error:', err);
-      setFormError(err.message || 'Failed to complete registration.');
+      const errMsg = err instanceof Error ? err.message : 'Failed to complete registration.';
+      setFormError(errMsg);
       setIsSubmitting(false);
     }
   };
@@ -289,13 +307,48 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
             finalPilotId = authData.user.id;
             
             // Load user profile from profiles table
-            const { data: profileData, error: profileError } = await supabase
+            let profileData: PilotProfile | null = null;
+            const { data: maybeProfile, error: profileError } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', finalPilotId)
-              .single();
+              .maybeSingle();
 
-            if (!profileError && profileData) {
+            if (!profileError && maybeProfile) {
+              profileData = maybeProfile;
+            } else {
+              console.warn('Profile not found in profiles table, reconstructing from user metadata:', profileError);
+              const metadata = authData.user.user_metadata || {};
+              const email = authData.user.email || computedEmail;
+              const fallbackUsername = email.split('@')[0];
+              const fallbackName = fallbackUsername.replace(/[._]/g, ' ').toUpperCase();
+              
+              profileData = {
+                id: finalPilotId,
+                email: email,
+                name: metadata.name || fallbackName || 'Unknown Pilot',
+                username: metadata.username || fallbackUsername,
+                rank: (metadata.rank === 'captain' || metadata.rank === 'first_officer') ? metadata.rank : 'first_officer',
+                base: metadata.base || 'BEY',
+                qualifications: metadata.qualifications || []
+              };
+
+              // Recreate/upsert the missing profile row in Supabase
+              try {
+                const { username: _username, ...supabaseProfileData } = profileData;
+                void _username;
+                const { error: upsertError } = await supabase
+                  .from('profiles')
+                  .upsert(supabaseProfileData);
+                if (upsertError) {
+                  console.error('Failed to upsert reconstructed profile to Supabase:', upsertError);
+                }
+              } catch (upsertErr) {
+                console.error('Exception during upsert of reconstructed profile:', upsertErr);
+              }
+            }
+
+            if (profileData) {
               db.updateProfile(profileData);
             }
 
@@ -323,8 +376,9 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
         // Fallback offline Mock Auth
         const profiles = db.getProfiles();
         const pilot = profiles.find(p => {
-          const u = (p?.username || '').toLowerCase();
-          const e = (p?.email || '').toLowerCase();
+          if (!p) return false;
+          const u = (p.username || '').toLowerCase();
+          const e = (p.email || '').toLowerCase();
           const target = (loginIdentifier || '').toLowerCase();
           return u === target || e === target;
         });
@@ -343,27 +397,15 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
       setIsLoggingIn(false);
       onClose();
       router.push('/dashboard');
-    } catch (err: any) {
+    } catch (err) {
       console.error('[Login Form] error:', err);
-      setLoginError(err.message || 'Failed to log in.');
+      const errMsg = err instanceof Error ? err.message : 'Failed to log in.';
+      setLoginError(errMsg);
       setIsLoggingIn(false);
     }
   };
 
-  const handleReset = () => {
-    setStep(1);
-    setStatus('idle');
-    setFileName('');
-    setErrorMessage('');
-    setParsedData(null);
-    setPassword('');
-    setConfirmPassword('');
-    setFormError('');
-    setLoginIdentifier('');
-    setLoginPassword('');
-    setLoginError('');
-    setIsLoggingIn(false);
-  };
+
 
   return (
     <Modal 
@@ -391,7 +433,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
           >
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <p className="text-xs text-neutral-500 mb-2 leading-relaxed font-sans">
-                Log in using your official MEA username (e.g. <code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-neutral-700">n.moghabghab</code>) or company email and your password.
+                Log in using your official MEA username (e.g. <code className="font-mono bg-neutral-100 px-1 py-0.5 rounded text-neutral-700">n.moghabghab</code>) or company email and your password.
               </p>
 
               <div className="space-y-3">
@@ -409,7 +451,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
                       required
                       value={loginIdentifier}
                       onChange={(e) => setLoginIdentifier(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-sans text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                      className="w-full pl-9 pr-4 py-2.5 bg-white border border-border rounded-xl text-sm font-sans text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                       placeholder="e.g. n.moghabghab"
                     />
                   </div>
@@ -429,7 +471,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
                       required
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
-                      className="w-full pl-9 pr-10 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-sans text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                      className="w-full pl-9 pr-10 py-2.5 bg-white border border-border rounded-xl text-sm font-sans text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                       placeholder="••••••••"
                     />
                     <button
@@ -450,7 +492,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
                 </div>
               )}
 
-              <div className="flex items-center justify-between pt-2 border-t border-amber-200/50">
+              <div className="flex items-center justify-between pt-2 border-t border-border">
                 <button
                   type="button"
                   onClick={() => setMode('signup')}
@@ -510,8 +552,8 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
                     onClick={triggerFileInput}
                     className={`border-2 border-dashed rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
                       dragActive 
-                        ? 'border-primary bg-pink-500/10 shadow-lg shadow-pink-500/10 scale-[1.01]' 
-                        : 'border-amber-300 hover:border-primary hover:bg-pink-500/5 bg-white/40 backdrop-blur-md'
+                        ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10 scale-[1.01]' 
+                        : 'border-neutral-300 hover:border-primary hover:bg-primary/5 bg-white/40 backdrop-blur-md'
                     }`}
                     onDragOver={handleDrag}
                     onDragLeave={handleDrag}
@@ -520,7 +562,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
                     <motion.div
                       animate={{ y: [0, -6, 0] }}
                       transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
-                      className="w-16 h-16 bg-pink-100 rounded-2xl flex items-center justify-center text-primary mb-4"
+                      className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-4"
                     >
                       <UploadCloud size={32} />
                     </motion.div>
@@ -542,13 +584,13 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="border border-amber-200 bg-white/80 backdrop-blur-md rounded-3xl p-8 flex flex-col items-center justify-center min-h-[220px]"
+                    className="border border-border bg-white/80 backdrop-blur-md rounded-3xl p-8 flex flex-col items-center justify-center min-h-[220px]"
                   >
                     <Loader className="animate-spin text-cta mb-4" size={36} />
                     <h4 className="text-md font-heading font-semibold text-neutral-800 mb-2">
                       {status === 'uploading' ? 'Uploading file...' : 'Gemini AI Processing...'}
                     </h4>
-                    <div className="w-full max-w-xs bg-amber-100 h-1.5 rounded-full overflow-hidden mb-4">
+                    <div className="w-full max-w-xs bg-cta/10 h-1.5 rounded-full overflow-hidden mb-4">
                       <motion.div
                         className="bg-cta h-full"
                         initial={{ width: "0%" }}
@@ -606,7 +648,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
             </form>
 
             {status === 'idle' && (
-              <div className="text-center pt-4 border-t border-amber-200/50 mt-4">
+              <div className="text-center pt-4 border-t border-border mt-4">
                 <button
                   type="button"
                   onClick={() => setMode('login')}
@@ -627,8 +669,8 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
             {parsedData && (
               <form onSubmit={handlePasswordSubmit} className="space-y-4 font-sans text-neutral-800">
                 {/* Meta details confirmation summary */}
-                <div className="bg-amber-100/50 border border-amber-200/60 rounded-2xl p-4 space-y-2">
-                  <span className="text-[10px] bg-pink-100 text-primary border border-pink-200 px-2 py-0.5 rounded-md font-semibold uppercase tracking-wider">
+                <div className="bg-neutral-50 border border-border rounded-2xl p-4 space-y-2">
+                  <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md font-semibold uppercase tracking-wider">
                     {parsedData.pilot_metadata.rank === 'captain' ? 'Captain' : 'First Officer'}
                   </span>
                   
@@ -641,7 +683,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-amber-200/50">
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
                     <div>
                       <span className="text-[10px] text-neutral-400 block">GENERATED USERNAME</span>
                       <span className="text-xs font-mono font-bold text-neutral-700">{parsedData.pilot_metadata.username}</span>
@@ -669,7 +711,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-9 pr-10 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-sans text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                        className="w-full pl-9 pr-10 py-2.5 bg-white border border-border rounded-xl text-sm font-sans text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                         placeholder="••••••••"
                       />
                       <button
@@ -696,7 +738,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
                         required
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full pl-9 pr-10 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-sans text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                        className="w-full pl-9 pr-10 py-2.5 bg-white border border-border rounded-xl text-sm font-sans text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                         placeholder="••••••••"
                       />
                       <button
@@ -717,7 +759,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-2 border-t border-amber-200/50">
+                <div className="flex items-center justify-between pt-2 border-t border-border">
                   <Button variant="ghost" size="sm" type="button" onClick={handleReset} disabled={isSubmitting}>
                     Back
                   </Button>

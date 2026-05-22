@@ -2,14 +2,12 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
 import { PlaneTakeoff, ShieldCheck, ArrowRightLeft, Users } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import SignUpModal from '@/components/SignUpModal';
 
 export default function Home() {
-  const router = useRouter();
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'signup' | 'login'>('signup');
 
@@ -29,12 +27,12 @@ export default function Home() {
         <div className="flex flex-col items-center">
           <motion.div 
             whileHover={{ rotate: [0, -5, 5, 0] }}
-            className="w-16 h-16 bg-gradient-to-tr from-primary to-cta rounded-2xl flex items-center justify-center text-white shadow-lg shadow-pink-500/20 mb-4"
+            className="w-16 h-16 bg-gradient-to-tr from-primary to-cta rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20 mb-4"
           >
             <PlaneTakeoff size={30} />
           </motion.div>
           
-          <h1 className="text-4xl md:text-5xl font-heading font-extrabold tracking-tight text-neutral-800">
+          <h1 className="text-4xl md:text-5xl font-heading font-extrabold tracking-tight text-foreground">
             MEA <span className="text-primary">Flight</span> Swap
           </h1>
           <p className="text-sm font-sans font-medium text-neutral-500 mt-2 tracking-wide uppercase">
@@ -44,13 +42,13 @@ export default function Home() {
 
         {/* Core Value Proposition Card */}
         <Card className="text-left md:p-8 max-w-xl mx-auto" hoverEffect={false}>
-          <h2 className="text-lg font-heading font-bold text-neutral-800 mb-4 text-center border-b border-amber-200/50 pb-3">
+          <h2 className="text-lg font-heading font-bold text-neutral-800 mb-4 text-center border-b border-border pb-3">
             Minimalist Flight Roster Swapping
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-2">
             <div className="flex flex-col items-center text-center p-2">
-              <div className="w-10 h-10 bg-pink-100 rounded-xl flex items-center justify-center text-primary mb-2">
+              <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary mb-2">
                 <ArrowRightLeft size={18} />
               </div>
               <h3 className="text-xs font-heading font-bold text-neutral-800 mb-1">Upload PDF</h3>
@@ -60,7 +58,7 @@ export default function Home() {
             </div>
 
             <div className="flex flex-col items-center text-center p-2">
-              <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center text-cta mb-2">
+              <div className="w-10 h-10 bg-cta/10 rounded-xl flex items-center justify-center text-cta mb-2">
                 <ShieldCheck size={18} />
               </div>
               <h3 className="text-xs font-heading font-bold text-neutral-800 mb-1">FTL Safety Check</h3>
@@ -70,7 +68,7 @@ export default function Home() {
             </div>
 
             <div className="flex flex-col items-center text-center p-2">
-              <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 mb-2">
+              <div className="w-10 h-10 bg-cta/10 rounded-xl flex items-center justify-center text-cta mb-2">
                 <Users size={18} />
               </div>
               <h3 className="text-xs font-heading font-bold text-neutral-800 mb-1">Instant Trade</h3>
@@ -84,7 +82,7 @@ export default function Home() {
         {/* Action Portal */}
         <div className="space-y-6 max-w-md mx-auto">
           {/* Sign Up / Login via Roster Box */}
-          <div className="bg-white/60 backdrop-blur-md border border-amber-200 rounded-3xl p-6 shadow-md text-center space-y-4">
+          <div className="bg-white/60 backdrop-blur-md border border-border rounded-3xl p-6 shadow-md text-center space-y-4">
             <h3 className="text-sm font-heading font-bold text-neutral-800">
               MEA Flight Swap Portal
             </h3>
@@ -108,7 +106,7 @@ export default function Home() {
                   setAuthModalMode('login');
                   setIsSignUpOpen(true);
                 }}
-                className="w-full justify-center border-primary/40 text-primary hover:bg-pink-500/5 hover:border-primary glow-primary"
+                className="w-full justify-center border-primary/40 text-primary hover:bg-primary/5 hover:border-primary glow-primary"
               >
                 Log In to Account
               </Button>

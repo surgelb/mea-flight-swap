@@ -43,7 +43,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: 'spring', duration: 0.4 }}
-            className="relative z-10 w-full max-w-lg bg-[#FEF3C7] border border-amber-200 rounded-3xl p-6 shadow-2xl shadow-neutral-950/20 max-h-[90vh] overflow-y-auto"
+            className="relative z-10 w-full max-w-lg bg-white border border-border rounded-3xl p-6 shadow-2xl shadow-neutral-950/20 max-h-[90vh] overflow-y-auto"
           >
             {/* Header */}
             <div className="flex items-center justify-between mb-5">
@@ -52,7 +52,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
               </h3>
               <button
                 onClick={onClose}
-                className="p-1 rounded-full text-neutral-500 hover:bg-amber-100 hover:text-neutral-800 transition-colors cursor-pointer"
+                className="p-1 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 transition-colors cursor-pointer"
               >
                 <X size={20} />
               </button>

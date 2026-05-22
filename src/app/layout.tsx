@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import { Poppins, Open_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const poppins = Poppins({
-  variable: "--font-poppins",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800"],
-});
-
-const openSans = Open_Sans({
-  variable: "--font-open-sans",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -27,11 +21,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${poppins.variable} ${openSans.variable} h-full antialiased`}
+      className={`${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-[#FEF3C7] text-neutral-900">
+      <body className="min-h-full flex flex-col font-sans bg-background text-foreground">
         {children}
       </body>
     </html>
   );
 }
+

@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plane, LogOut, ArrowRightLeft, FileSpreadsheet, ShieldAlert, MessageSquare, PlusCircle, Loader, ShieldCheck } from 'lucide-react';
-import { db, PilotProfile, FlightDuty, SwapProposal, SwapRequest } from '@/lib/db';
+import { Plane, LogOut, ShieldAlert, MessageSquare, Loader, ShieldCheck } from 'lucide-react';
+import { db, PilotProfile, FlightDuty, SwapProposal } from '@/lib/db';
+import { supabase, hasSupabase } from '@/lib/supabase';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Modal from '@/components/ui/Modal';
@@ -15,6 +16,18 @@ import FullRosterGrid from '@/components/FullRosterGrid';
 
 export default function Dashboard() {
   const router = useRouter();
+
+  const handleExit = async () => {
+    db.setCurrentPilotId(null);
+    if (hasSupabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.error('Error signing out of Supabase:', err);
+      }
+    }
+    router.push('/');
+  };
   const [pilot, setPilot] = useState<PilotProfile | null>(null);
   const [flights, setFlights] = useState<FlightDuty[]>([]);
   const [activeTab, setActiveTab] = useState<'roster' | 'board' | 'grid'>('roster');
@@ -40,15 +53,12 @@ export default function Dashboard() {
   const [incomingProposals, setIncomingProposals] = useState<SwapProposal[]>([]);
   const [outgoingProposals, setOutgoingProposals] = useState<SwapProposal[]>([]);
 
-  useEffect(() => {
-    loadData();
-    // Refresh interval for live simulation feeling
-    const interval = setInterval(loadData, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadData = () => {
+  function loadData() {
     const currentPilot = db.getCurrentPilot();
+    if (!currentPilot) {
+      router.push('/');
+      return;
+    }
     setPilot(currentPilot);
     setFlights(db.getFlights(currentPilot.id).sort((a,b) => a.day_number - b.day_number));
 
@@ -62,7 +72,20 @@ export default function Dashboard() {
     setIncomingProposals(allProposals.filter(p => myRequestIds.includes(p.request_id) && p.status === 'pending'));
     // Outgoing: proposals created by me
     setOutgoingProposals(allProposals.filter(p => p.proposer_id === currentPilot.id));
-  };
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadData();
+    }, 0);
+    // Refresh interval for live simulation feeling
+    const interval = setInterval(loadData, 3000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleUploadSuccess = (updatedPilot: PilotProfile) => {
     setPilot(updatedPilot);
@@ -126,7 +149,7 @@ export default function Dashboard() {
         passed: data.legality_check_passed,
         notes: data.legality_notes
       });
-    } catch (err) {
+    } catch {
       setDirectLegalityResult({
         passed: true,
         notes: "Swap verification computed successfully. No duty gaps found."
@@ -173,8 +196,10 @@ export default function Dashboard() {
     setSelectedMyFlightForDirect(null);
     setDirectLegalityResult(null);
     
-    // Redirect to negotiation chat
-    router.push(`/chat/room-rayan-naim`);
+    // Redirect to dynamic sorted room ID
+    const ids = [pilot.id, directTargetPilot.id].sort();
+    const roomId = `room-${ids[0]}--${ids[1]}`;
+    router.push(`/chat/${roomId}`);
   };
 
   const handleAcceptProposal = (proposal: SwapProposal) => {
@@ -200,8 +225,10 @@ export default function Dashboard() {
     // 2. Mark proposal as accepted
     db.updateProposalStatus(proposal.id, 'accepted');
     
-    // 3. Open the chat coordinator
-    router.push(`/chat/room-rayan-naim`);
+    // 3. Open the dynamic sorted room ID
+    const ids = [proposal.proposer_id, request.pilot_id].sort();
+    const roomId = `room-${ids[0]}--${ids[1]}`;
+    router.push(`/chat/${roomId}`);
   };
 
   const handleDeclineProposal = (proposalId: string) => {
@@ -210,8 +237,20 @@ export default function Dashboard() {
   };
 
   const handleProposalCreated = (proposalId: string) => {
-    // Redirect user to the corresponding chat room
-    router.push(`/chat/room-rayan-naim`);
+    // Redirect user to the corresponding dynamic chat room
+    const prop = db.getProposals().find(p => p.id === proposalId);
+    if (!prop) {
+      router.push('/dashboard');
+      return;
+    }
+    const req = db.getSwapRequests().find(r => r.id === prop.request_id);
+    if (!req) {
+      router.push('/dashboard');
+      return;
+    }
+    const ids = [prop.proposer_id, req.pilot_id].sort();
+    const roomId = `room-${ids[0]}--${ids[1]}`;
+    router.push(`/chat/${roomId}`);
   };
 
   if (!pilot) return null;
@@ -219,16 +258,15 @@ export default function Dashboard() {
   // Calculate pilot duty statistics
   const flightDutiesCount = flights.filter(f => f.duty_type === 'flight').length;
   const standbyCount = flights.filter(f => f.duty_type === 'standby').length;
-  const offDaysCount = flights.filter(f => f.duty_type === 'off').length;
   const totalBlockMins = flights.reduce((sum, f) => sum + (f.block_time_mins || 0), 0);
   const totalBlockHours = Math.round(totalBlockMins / 60);
 
   return (
     <div className="flex-1 flex flex-col max-w-5xl w-full mx-auto p-4 md:p-6 space-y-6">
       {/* Header bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/40 backdrop-blur-md border border-amber-200/50 rounded-3xl p-5 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/40 backdrop-blur-md border border-border rounded-3xl p-5 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-md shadow-pink-500/20">
+          <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-md shadow-primary/20">
             <Plane size={24} />
           </div>
           <div>
@@ -242,7 +280,7 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-          <Button variant="ghost" size="sm" onClick={() => router.push('/')} className="text-xs">
+          <Button variant="ghost" size="sm" onClick={handleExit} className="text-xs">
             <LogOut size={14} className="mr-1.5" /> Exit
           </Button>
         </div>
@@ -250,19 +288,19 @@ export default function Dashboard() {
 
       {/* Grid of basic stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card hoverEffect={false} className="p-4 flex flex-col justify-between border-amber-100">
+        <Card hoverEffect={false} className="p-4 flex flex-col justify-between border-border">
           <span className="text-xs text-neutral-400 font-medium">May Roster Month</span>
           <p className="text-2xl font-heading font-extrabold text-neutral-800 mt-1">2026</p>
         </Card>
-        <Card hoverEffect={false} className="p-4 flex flex-col justify-between border-amber-100">
+        <Card hoverEffect={false} className="p-4 flex flex-col justify-between border-border">
           <span className="text-xs text-neutral-400 font-medium">Flight Duties</span>
           <p className="text-2xl font-heading font-extrabold text-neutral-800 mt-1">{flightDutiesCount} Sectors</p>
         </Card>
-        <Card hoverEffect={false} className="p-4 flex flex-col justify-between border-amber-100">
+        <Card hoverEffect={false} className="p-4 flex flex-col justify-between border-border">
           <span className="text-xs text-neutral-400 font-medium">Standby (SB) Days</span>
           <p className="text-2xl font-heading font-extrabold text-neutral-800 mt-1">{standbyCount} Days</p>
         </Card>
-        <Card hoverEffect={false} className="p-4 flex flex-col justify-between border-amber-100">
+        <Card hoverEffect={false} className="p-4 flex flex-col justify-between border-border">
           <span className="text-xs text-neutral-400 font-medium">Credit Block Time</span>
           <p className="text-2xl font-heading font-extrabold text-neutral-800 mt-1">{totalBlockHours} Hours</p>
         </Card>
@@ -285,7 +323,7 @@ export default function Dashboard() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: -10 }}
             >
-              <div className="border border-pink-200 bg-pink-500/5 backdrop-blur-md rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm shadow-pink-500/5 glow-primary">
+              <div className="border border-primary/20 bg-primary/5 backdrop-blur-md rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm shadow-primary/5 glow-primary">
                 <div className="flex gap-3">
                   <ShieldAlert className="text-primary shrink-0 mt-0.5" size={20} />
                   <div>
@@ -296,7 +334,7 @@ export default function Dashboard() {
                       They offer their <strong className="text-primary">{requesterFlight.flight_number || requesterFlight.duty_type}</strong> (May {requesterFlight.day_number}) in trade for your <strong className="text-cta">{myFlight.flight_number || myFlight.duty_type}</strong> (May {myFlight.day_number}).
                     </p>
                     <p className="text-[10px] text-neutral-500 italic mt-1.5">
-                      Safety Advisor: "{prop.legality_notes}"
+                      Safety Advisor: &ldquo;{prop.legality_notes}&rdquo;
                     </p>
                   </div>
                 </div>
@@ -316,21 +354,27 @@ export default function Dashboard() {
       </AnimatePresence>
 
       {/* Outgoing proposals or ongoing active chats link */}
-      {outgoingProposals.some(p => p.status === 'pending') && (
-        <Card hoverEffect={false} className="border-violet-100 bg-violet-500/5 flex items-center justify-between py-3 px-5">
-          <div className="flex items-center gap-2 text-xs text-neutral-600">
-            <MessageSquare size={16} className="text-cta" />
-            <span>You have an active proposal submitted. Coordinate details in the negotiation channel.</span>
-          </div>
-          <Button variant="cta" size="sm" onClick={() => router.push('/chat/room-rayan-naim')} className="text-xs">
-            Open Chat Room
-          </Button>
-        </Card>
-      )}
+      {outgoingProposals.filter(p => p.status === 'pending').map(p => {
+        const req = db.getSwapRequests().find(r => r.id === p.request_id);
+        if (!req) return null;
+        const ids = [p.proposer_id, req.pilot_id].sort();
+        const roomId = `room-${ids[0]}--${ids[1]}`;
+        return (
+          <Card key={p.id} hoverEffect={false} className="border-cta/20 bg-cta/5 flex items-center justify-between py-3 px-5">
+            <div className="flex items-center gap-2 text-xs text-neutral-600">
+              <MessageSquare size={16} className="text-cta" />
+              <span>You have an active proposal submitted. Coordinate details in the negotiation channel.</span>
+            </div>
+            <Button variant="cta" size="sm" onClick={() => router.push(`/chat/${roomId}`)} className="text-xs">
+              Open Chat Room
+            </Button>
+          </Card>
+        );
+      })}
 
       {/* Primary tabs */}
       <div className="flex flex-col space-y-4">
-        <div className="flex border-b border-amber-200/50 gap-6">
+        <div className="flex border-b border-border gap-6">
           <button
             onClick={() => setActiveTab('roster')}
             className={`pb-3 font-heading font-bold text-sm tracking-wider uppercase border-b-2 transition-all cursor-pointer ${
@@ -377,7 +421,7 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-4">
                   {/* Action bar to upload new roster */}
-                  <div className="flex justify-between items-center bg-white/20 p-4 rounded-2xl border border-amber-200/30">
+                  <div className="flex justify-between items-center bg-white/20 p-4 rounded-2xl border border-border">
                     <span className="text-xs text-neutral-500 font-medium">
                       Showing {flights.length} roster duties. Drag new file to replace.
                     </span>
@@ -444,7 +488,7 @@ export default function Dashboard() {
           <form onSubmit={handleCreateSwapRequestSubmit} className="space-y-4">
             <div>
               <span className="text-xs text-neutral-400 uppercase font-semibold">Selected Roster Item</span>
-              <div className="mt-2 p-3 bg-amber-50 rounded-2xl border border-amber-200/30 text-xs">
+              <div className="mt-2 p-3 bg-background/80 rounded-2xl border border-border text-xs">
                 <strong>{selectedFlightForSwap.flight_number || selectedFlightForSwap.duty_type.toUpperCase()}</strong>
                 {selectedFlightForSwap.origin && ` (${selectedFlightForSwap.origin} → ${selectedFlightForSwap.destination})`}
                 <p className="text-[10px] text-neutral-400 mt-1">
@@ -463,7 +507,7 @@ export default function Dashboard() {
                 placeholder="e.g., LHR flight, Gulf sectors, or Weekend Off"
                 value={preferredDest}
                 onChange={e => setPreferredDest(e.target.value)}
-                className="w-full px-4 py-2 text-sm rounded-xl border border-amber-200 bg-white/80 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full px-4 py-2 text-sm rounded-xl border border-border bg-white/80 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
 
@@ -476,7 +520,7 @@ export default function Dashboard() {
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
                 rows={3}
-                className="w-full px-4 py-2 text-sm rounded-xl border border-amber-200 bg-white/80 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                className="w-full px-4 py-2 text-sm rounded-xl border border-border bg-white/80 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-none"
               />
             </div>
 
@@ -505,7 +549,7 @@ export default function Dashboard() {
               <p className="text-sm font-semibold text-neutral-800">
                 {directTargetPilot.name}
               </p>
-              <div className="mt-2 p-3 bg-amber-50/50 rounded-2xl border border-amber-200/30 text-xs">
+              <div className="mt-2 p-3 bg-background/40 rounded-2xl border border-border text-xs">
                 <strong>Their Duty:</strong> {directTargetFlight.flight_number || directTargetFlight.duty_type.toUpperCase()} 
                 {directTargetFlight.origin && ` (${directTargetFlight.origin} → ${directTargetFlight.destination})`}
                 <p className="text-[10px] text-neutral-500 mt-1">
@@ -526,8 +570,8 @@ export default function Dashboard() {
                     onClick={() => handleSelectMyFlightForDirect(f)}
                     className={`w-full text-left p-3 rounded-xl border text-xs transition-all flex justify-between items-center cursor-pointer ${
                       selectedMyFlightForDirect?.id === f.id
-                        ? 'border-primary bg-pink-500/5 shadow-md shadow-pink-500/5'
-                        : 'border-amber-200/40 hover:border-primary bg-white/40'
+                        ? 'border-primary bg-primary/5 shadow-md shadow-primary/5'
+                        : 'border-border hover:border-primary bg-white/40'
                     }`}
                   >
                     <div>
@@ -555,7 +599,7 @@ export default function Dashboard() {
 
             {/* Legality Validation Status */}
             {(checkingDirectLegality || directLegalityResult) && (
-              <div className="p-4 rounded-2xl bg-white border border-amber-200/60 shadow-inner">
+              <div className="p-4 rounded-2xl bg-white border border-border shadow-inner">
                 <span className="text-xs text-neutral-400 uppercase font-semibold block mb-2">
                   Gemini FTL Legality Assessment
                 </span>

@@ -1,11 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Plane, Calendar, Clock, User, Check, Search, Filter } from 'lucide-react';
+import { User, Search, Filter } from 'lucide-react';
 import { db, PilotProfile, FlightDuty } from '@/lib/db';
 import Card from './ui/Card';
-import Button from './ui/Button';
 
 interface FullRosterGridProps {
   currentPilotId: string;
@@ -20,9 +18,11 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
-    // Load profiles and flights
-    setProfiles(db.getProfiles());
-    setAllFlights(db.getFlights());
+    // Load profiles and flights asynchronously to prevent synchronous cascading renders
+    const timer = setTimeout(() => {
+      setProfiles(db.getProfiles());
+      setAllFlights(db.getFlights());
+    }, 0);
 
     // Refresh every 3 seconds to keep sync
     const interval = setInterval(() => {
@@ -30,7 +30,10 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
       setAllFlights(db.getFlights());
     }, 3000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, []);
 
   // Helper to get weekday for May 2026
@@ -81,12 +84,12 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
   const getDutyBadgeStyles = (duty: FlightDuty) => {
     switch (duty.duty_type) {
       case 'off':
-        return 'bg-rose-50 border border-rose-100 text-rose-600 font-bold text-[10px] w-full py-1 rounded shadow-sm flex items-center justify-center';
+        return 'bg-emerald-50 border border-emerald-100 text-emerald-600 font-bold text-[10px] w-full py-1 rounded shadow-sm flex items-center justify-center';
       case 'standby':
-        return 'bg-violet-50 border border-violet-100 text-violet-600 font-bold text-[10px] w-full py-1 rounded shadow-sm flex items-center justify-center hover:scale-105 transition-transform';
+        return 'bg-amber-50 border border-amber-100 text-amber-700 font-bold text-[10px] w-full py-1 rounded shadow-sm flex items-center justify-center hover:scale-105 transition-transform';
       case 'simulator':
       case 'training':
-        return 'bg-amber-50 border border-amber-100 text-amber-700 font-bold text-[10px] w-full py-1 rounded shadow-sm flex items-center justify-center';
+        return 'bg-cta/5 border border-cta/10 text-cta font-bold text-[10px] w-full py-1 rounded shadow-sm flex items-center justify-center';
       case 'flight':
       default:
         return 'bg-white border border-neutral-200 text-neutral-800 font-extrabold text-[10px] w-full py-0.5 rounded shadow-sm flex flex-col items-center justify-center hover:scale-105 transition-transform hover:border-primary';
@@ -106,8 +109,8 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
   return (
     <div className="space-y-4">
       {/* Filtering Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white/40 backdrop-blur-md border border-amber-200/40 p-4 rounded-2xl shadow-sm">
-        <div className="flex items-center gap-2 w-full sm:w-auto bg-white/60 px-3 py-1.5 rounded-xl border border-amber-200">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white/40 backdrop-blur-md border border-border/40 p-4 rounded-2xl shadow-sm">
+        <div className="flex items-center gap-2 w-full sm:w-auto bg-white/60 px-3 py-1.5 rounded-xl border border-border">
           <Search size={16} className="text-neutral-400" />
           <input
             type="text"
@@ -122,7 +125,7 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
           <span className="text-xs text-neutral-500 font-semibold flex items-center gap-1.5 shrink-0">
             <Filter size={14} /> Qual Filter:
           </span>
-          <div className="flex bg-white/60 p-0.5 rounded-xl border border-amber-200 text-xs">
+          <div className="flex bg-white/60 p-0.5 rounded-xl border border-border text-xs">
             {['all', 'A320', 'A321', 'A330'].map((qual) => (
               <button
                 key={qual}
@@ -141,13 +144,13 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
       </div>
 
       {/* Grid Container */}
-      <Card hoverEffect={false} className="p-0 border-amber-200/50 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-amber-200 scrollbar-track-transparent">
+      <Card hoverEffect={false} className="p-0 border-border/80 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-neutral-200 scrollbar-track-transparent">
           <table className="min-w-max w-full border-collapse text-left font-sans text-xs">
             <thead>
-              <tr className="bg-amber-100/50 text-neutral-600 font-semibold border-b border-amber-200">
+              <tr className="bg-neutral-100/80 text-neutral-600 font-semibold border-b border-border">
                 {/* Sticky Header Left */}
-                <th className="sticky left-0 bg-amber-50/95 backdrop-blur-sm z-20 px-4 py-3 border-r border-amber-200 w-[240px] shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+                <th className="sticky left-0 bg-neutral-50/95 backdrop-blur-sm z-20 px-4 py-3 border-r border-border w-[240px] shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
                   <div className="flex justify-between items-center">
                     <span className="font-heading font-extrabold uppercase tracking-wider text-[11px] text-neutral-700">MEA CREW MEMBER</span>
                     <span className="text-[10px] text-neutral-400 italic">May 2026</span>
@@ -155,9 +158,9 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
                 </th>
                 
                 {/* Stats Headers */}
-                <th className="px-3 py-3 border-r border-amber-200 text-center font-heading font-bold text-[10px] text-neutral-500 w-[70px]">BLOCK</th>
-                <th className="px-3 py-3 border-r border-amber-200 text-center font-heading font-bold text-[10px] text-neutral-500 w-[50px]">SECT</th>
-                <th className="px-3 py-3 border-r border-amber-200 text-center font-heading font-bold text-[10px] text-neutral-500 w-[50px]">SBY</th>
+                <th className="px-3 py-3 border-r border-border text-center font-heading font-bold text-[10px] text-neutral-500 w-[70px]">BLOCK</th>
+                <th className="px-3 py-3 border-r border-border text-center font-heading font-bold text-[10px] text-neutral-500 w-[50px]">SECT</th>
+                <th className="px-3 py-3 border-r border-border text-center font-heading font-bold text-[10px] text-neutral-500 w-[50px]">SBY</th>
 
                 {/* Day Columns */}
                 {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
@@ -165,8 +168,8 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
                   return (
                     <th
                       key={day}
-                      className={`py-2 px-1 text-center border-r border-amber-200/50 min-w-[52px] ${
-                        weekend ? 'bg-amber-200/20 text-neutral-700' : 'text-neutral-500'
+                      className={`py-2 px-1 text-center border-r border-border/40 min-w-[52px] ${
+                        weekend ? 'bg-neutral-100/50 text-neutral-700' : 'text-neutral-500'
                       }`}
                     >
                       <div className="flex flex-col items-center">
@@ -190,19 +193,19 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
                 return (
                   <tr
                     key={pilot.id}
-                    className={`border-b border-amber-200/30 transition-colors ${
+                    className={`border-b border-border/30 transition-colors ${
                       isCurrent
-                        ? 'bg-pink-500/5 border-l-4 border-l-primary'
+                        ? 'bg-primary/5 border-l-4 border-l-primary'
                         : 'hover:bg-white/40'
                     }`}
                   >
                     {/* Sticky Name Column */}
-                    <td className={`sticky left-0 z-10 px-4 py-3 border-r border-amber-200 font-sans shadow-[2px_0_5px_rgba(0,0,0,0.03)] ${
-                      isCurrent ? 'bg-pink-50/95' : 'bg-amber-50/95'
+                    <td className={`sticky left-0 z-10 px-4 py-3 border-r border-border font-sans shadow-[2px_0_5px_rgba(0,0,0,0.03)] ${
+                      isCurrent ? 'bg-primary/5' : 'bg-white'
                     }`}>
                       <div className="flex items-center gap-2.5">
                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                          isCurrent ? 'bg-primary/20 text-primary' : 'bg-amber-200/40 text-amber-700'
+                          isCurrent ? 'bg-primary/10 text-primary' : 'bg-neutral-100 text-neutral-600'
                         }`}>
                           <User size={14} />
                         </div>
@@ -225,13 +228,13 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
                     </td>
 
                     {/* Stats cells */}
-                    <td className="px-2 py-3 border-r border-amber-200 text-center font-mono font-bold text-neutral-700">
+                    <td className="px-2 py-3 border-r border-border text-center font-mono font-bold text-neutral-700">
                       {stats.hours}h
                     </td>
-                    <td className="px-2 py-3 border-r border-amber-200 text-center font-mono font-semibold text-neutral-600">
+                    <td className="px-2 py-3 border-r border-border text-center font-mono font-semibold text-neutral-600">
                       {stats.sectors}
                     </td>
-                    <td className="px-2 py-3 border-r border-amber-200 text-center font-mono text-neutral-500">
+                    <td className="px-2 py-3 border-r border-border text-center font-mono text-neutral-500">
                       {stats.standby}
                     </td>
 
@@ -243,8 +246,8 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
                       return (
                         <td
                           key={day}
-                          className={`p-1 border-r border-amber-200/30 text-center min-w-[52px] align-middle ${
-                            weekend ? 'bg-amber-200/5' : ''
+                          className={`p-1 border-r border-border/30 text-center min-w-[52px] align-middle ${
+                            weekend ? 'bg-neutral-50/50' : ''
                           }`}
                         >
                           <div className="flex flex-col gap-1 items-center justify-center">
@@ -305,22 +308,22 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
       </Card>
 
       {/* Legend key */}
-      <div className="flex flex-wrap gap-4 justify-start items-center bg-white/30 p-3 rounded-xl border border-amber-200/30 text-[10px] font-semibold text-neutral-600">
+      <div className="flex flex-wrap gap-4 justify-start items-center bg-white/30 p-3 rounded-xl border border-border/40 text-[10px] font-semibold text-neutral-600">
         <span className="text-xs font-bold text-neutral-700">LEGEND:</span>
         <div className="flex items-center gap-1.5">
           <span className="w-4 h-4 bg-white border border-neutral-200 shadow-sm rounded flex items-center justify-center text-[9px] font-extrabold text-neutral-800">201</span>
           <span>Flight (Click to Swap)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-4 h-4 bg-violet-50 border border-violet-100 text-violet-600 shadow-sm rounded flex items-center justify-center text-[9px] font-extrabold">SB</span>
+          <span className="w-4 h-4 bg-amber-50 border border-amber-100 text-amber-700 shadow-sm rounded flex items-center justify-center text-[9px] font-extrabold">SB</span>
           <span>Standby (Click to Swap)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-4 h-4 bg-rose-50 border border-rose-100 text-rose-600 shadow-sm rounded flex items-center justify-center text-[9px] font-extrabold">X</span>
+          <span className="w-4 h-4 bg-emerald-50 border border-emerald-100 text-emerald-600 shadow-sm rounded flex items-center justify-center text-[9px] font-extrabold">X</span>
           <span>Day Off / Rest Off</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-4 h-4 bg-amber-50 border border-amber-100 text-amber-700 shadow-sm rounded flex items-center justify-center text-[9px] font-extrabold">SIM</span>
+          <span className="w-4 h-4 bg-cta/5 border border-cta/10 text-cta shadow-sm rounded flex items-center justify-center text-[9px] font-extrabold">SIM</span>
           <span>Simulator & Training</span>
         </div>
       </div>
