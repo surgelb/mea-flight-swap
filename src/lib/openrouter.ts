@@ -57,12 +57,12 @@ export async function generateContentWithFallback(
     messages.push({ role: 'user', content: userContent });
   }
 
-  // OpenRouter models to cascade try (defaulting to fast, reliable, JSON-capable options)
+  // OpenRouter models to cascade try (only free models to prevent using paid credits)
   const models = [
-    'google/gemini-2.5-flash',
-    'google/gemini-2.0-flash-001',
-    'meta-llama/llama-3.3-70b-instruct',
     'meta-llama/llama-3.3-70b-instruct:free',
+    'deepseek/deepseek-v4-flash:free',
+    'meta-llama/llama-3.2-3b-instruct:free',
+    'nousresearch/hermes-3-llama-3.1-405b:free',
   ];
   let lastError: unknown = null;
 
@@ -95,3 +95,24 @@ export async function generateContentWithFallback(
 
   throw lastError || new Error('All OpenRouter models failed to generate content');
 }
+
+export function cleanAndParseJson(text: string) {
+  let cleaned = text.trim();
+  
+  // Try to find a JSON block wrapped in ```json ... ``` or ``` ... ```
+  const jsonBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+  const match = cleaned.match(jsonBlockRegex);
+  if (match && match[1]) {
+    cleaned = match[1].trim();
+  }
+
+  // Extract the JSON object substring from the first '{' to the last '}'
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+
+  return JSON.parse(cleaned);
+}
+

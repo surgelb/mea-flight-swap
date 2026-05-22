@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pdf from 'pdf-parse';
-import { openai, generateContentWithFallback } from '@/lib/openrouter';
+import { openai, generateContentWithFallback, cleanAndParseJson } from '@/lib/openrouter';
 
 export async function POST(req: Request) {
   try {
@@ -130,7 +130,7 @@ export async function POST(req: Request) {
     const parsedText = response.text || '{}';
     let result;
     try {
-      result = JSON.parse(parsedText);
+      result = cleanAndParseJson(parsedText);
     } catch {
       console.error('[Register Roster API] Failed to parse Gemini JSON response:', parsedText);
       return NextResponse.json({ error: 'Failed to interpret parser results. Please try again.' }, { status: 500 });

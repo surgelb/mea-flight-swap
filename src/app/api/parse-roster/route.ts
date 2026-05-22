@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pdf from 'pdf-parse';
-import { openai, generateContentWithFallback } from '@/lib/openrouter';
+import { openai, generateContentWithFallback, cleanAndParseJson } from '@/lib/openrouter';
 
 export async function POST(req: Request) {
   try {
@@ -126,7 +126,12 @@ export async function POST(req: Request) {
 
 
     const parsedText = response.text || '{}';
-    return NextResponse.json(JSON.parse(parsedText));
+    try {
+      return NextResponse.json(cleanAndParseJson(parsedText));
+    } catch (parseErr) {
+      console.error('[Parse Roster API] Failed to parse JSON response:', parsedText, parseErr);
+      return NextResponse.json({ error: 'Failed to interpret parser results. Please try again.' }, { status: 500 });
+    }
 
   } catch (error) {
     console.error('Error in parse-roster API:', error);
