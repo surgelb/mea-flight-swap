@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ai, generateContentWithFallback } from '@/lib/gemini';
+import { openai, generateContentWithFallback } from '@/lib/openrouter';
 
 interface FlightCheckDuty {
   duty_type: string;
@@ -59,8 +59,8 @@ export async function POST(req: Request) {
     const passed = !restViolation;
     let explanation = '';
 
-    if (ai) {
-      // Use Gemini to explain the swap safety profile
+    if (openai) {
+      // Use OpenRouter to explain the swap safety profile
       const prompt = `
         You are an airline Flight Operations Legality Advisor.
         We are verifying if a roster swap is legal and safe for a pilot.

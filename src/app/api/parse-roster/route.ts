@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pdf from 'pdf-parse';
-import { ai, generateContentWithFallback } from '@/lib/gemini';
+import { openai, generateContentWithFallback } from '@/lib/openrouter';
 
 export async function POST(req: Request) {
   try {
@@ -13,13 +13,14 @@ export async function POST(req: Request) {
 
     console.log(`Parsing file: ${file.name}, size: ${file.size} bytes`);
 
-    // Error if Gemini key is missing
-    if (!ai) {
-      console.error('[Parse Roster API] GEMINI_API_KEY is not set.');
+    // Error if OpenRouter key is missing
+    if (!openai) {
+      console.error('[Parse Roster API] OPENROUTER_API_KEY is not set.');
       return NextResponse.json({ 
         error: 'Roster parsing service is temporarily unavailable (missing API key configuration).' 
       }, { status: 500 });
     }
+
 
     // Actual Gemini parser code
     const fileBytes = await file.arrayBuffer();
