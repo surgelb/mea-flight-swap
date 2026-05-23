@@ -4,6 +4,7 @@ import { openai, generateContentWithFallback } from '@/lib/openrouter';
 export const maxDuration = 60; // Allow up to 60 seconds on Vercel for OpenRouter cascade
 
 interface FlightCheckDuty {
+  day_number?: number;
   duty_type: string;
   flight_number: string | null;
   origin: string | null;
@@ -20,12 +21,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No proposed duty provided' }, { status: 400 });
     }
 
-    // Filter out the duty we are giving away, and insert the proposed duty
-    const currentSchedule = (pilotFlights as FlightCheckDuty[] || [])
-      .filter(f => !dutyToGiveAway || f.flight_number !== dutyToGiveAway.flight_number || f.reporting_time !== dutyToGiveAway.reporting_time);
+    const proposedDuties = Array.isArray(proposedDuty) ? proposedDuty : [proposedDuty];
+    const dutiesToGiveAway = Array.isArray(dutyToGiveAway) ? dutyToGiveAway : (dutyToGiveAway ? [dutyToGiveAway] : []);
 
-    // Add the new proposed duty to the schedule
-    const newSchedule = [...currentSchedule, proposedDuty];
+    // Filter out the duties we are giving away (by matching day_number or calendar date)
+    const currentSchedule = (pilotFlights as FlightCheckDuty[] || [])
+      .filter(f => {
+        return !dutiesToGiveAway.some(giveAway => 
+          f.day_number === giveAway.day_number || 
+          (f.reporting_time && giveAway.reporting_time && f.reporting_time.substring(0, 10) === giveAway.reporting_time.substring(0, 10))
+        );
+      });
+
+    // Add the new proposed duties to the schedule
+    const newSchedule = [...currentSchedule, ...proposedDuties];
 
     // Filter duties that have times and sort them chronologically
     const timedDuties = newSchedule
@@ -68,8 +77,8 @@ export async function POST(req: Request) {
         We are verifying if a roster swap is legal and safe for a pilot.
         
         Proposed Swap Details:
-        - Duty to Give Away: ${dutyToGiveAway ? JSON.stringify(dutyToGiveAway) : 'None'}
-        - Proposed Duty to Take: ${JSON.stringify(proposedDuty)}
+        - Duties to Give Away: ${dutiesToGiveAway.length > 0 ? JSON.stringify(dutiesToGiveAway) : 'None'}
+        - Proposed Duties to Take: ${JSON.stringify(proposedDuties)}
         - Swap Legality Check Result: ${passed ? 'PASSED deterministic rest checks' : `FAILED deterministic rest checks. Violation: Rest period between ${restViolation?.after} and ${restViolation?.before} is only ${restViolation?.restHours} hours (legal minimum is 12 hours).`}
         
         Provide a concise, 2-3 sentence analysis of this swap for the pilot. 
@@ -85,13 +94,15 @@ export async function POST(req: Request) {
       }
     }
 
-
     // Fallback explanation generator
     if (!explanation) {
       if (passed) {
-        explanation = `The proposed swap for duty ${proposedDuty.flight_number || proposedDuty.duty_type} complies with EASA/MEA Flight Time Limitations (FTL). You maintain a healthy rest margin of at least 12 hours between consecutive duties.`;
+        const flightNames = proposedDuties.map(d => d.flight_number).filter(Boolean).join('/');
+        explanation = `The proposed swap for duty ${flightNames || 'flight'} complies with EASA/MEA Flight Time Limitations (FTL). You maintain a healthy rest margin of at least 12 hours between consecutive duties.`;
       } else {
-        explanation = `⚠️ WARNING: Swapping ${dutyToGiveAway?.flight_number || 'your flight'} for ${proposedDuty.flight_number || proposedDuty.duty_type} creates a rest violation. You will only have ${restViolation!.restHours} hours of rest between releasing from duty ${restViolation!.after} and reporting for duty ${restViolation!.before} on ${restViolation!.date}. The legal minimum is 12 hours.`;
+        const giveAwayNames = dutiesToGiveAway.map(d => d.flight_number).filter(Boolean).join('/');
+        const takeNames = proposedDuties.map(d => d.flight_number).filter(Boolean).join('/');
+        explanation = `⚠️ WARNING: Swapping ${giveAwayNames || 'your flight'} for ${takeNames || 'flight'} creates a rest violation. You will only have ${restViolation!.restHours} hours of rest between releasing from duty ${restViolation!.after} and reporting for duty ${restViolation!.before} on ${restViolation!.date}. The legal minimum is 12 hours.`;
       }
     }
 

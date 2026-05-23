@@ -64,13 +64,16 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
     const targetFlight = getFlightInfo(selectedRequest!.flight_id);
 
     try {
+      const targetFlightsOnDay = allFlights.filter(f => f.pilot_id === selectedRequest!.pilot_id && f.day_number === targetFlight?.day_number);
+      const myFlightsOnDay = myFlights.filter(f => f.day_number === flight.day_number);
+
       const response = await fetch('/api/verify-legality', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pilotFlights: myFlights,
-          proposedDuty: targetFlight, // Flight I am taking on
-          dutyToGiveAway: flight      // Flight I am giving away
+          proposedDuty: targetFlightsOnDay, // Flights I am taking on
+          dutyToGiveAway: myFlightsOnDay      // Flights I am giving away
         })
       });
 

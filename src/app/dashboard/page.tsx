@@ -131,14 +131,18 @@ export default function Dashboard() {
     setCheckingDirectLegality(true);
     setDirectLegalityResult(null);
 
+    const allFlights = db.getFlights();
+    const targetFlightsOnDay = allFlights.filter(f => f.pilot_id === directTargetPilot?.id && f.day_number === directTargetFlight?.day_number);
+    const myFlightsOnDay = flights.filter(f => f.day_number === myFlight.day_number);
+
     try {
       const response = await fetch('/api/verify-legality', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          pilotFlights: flights, // my flights
-          proposedDuty: directTargetFlight, // what I want
-          dutyToGiveAway: myFlight // what I offer
+          pilotFlights: flights,
+          proposedDuty: targetFlightsOnDay,
+          dutyToGiveAway: myFlightsOnDay
         })
       });
 
@@ -208,16 +212,24 @@ export default function Dashboard() {
     const request = db.getSwapRequests().find(r => r.id === proposal.request_id);
     if (!request) return;
 
-    const requestFlightIdx = allFlights.findIndex(f => f.id === request.flight_id);
-    const proposedFlightIdx = allFlights.findIndex(f => f.id === proposal.proposed_flight_id);
+    const requestFlight = allFlights.find(f => f.id === request.flight_id);
+    const proposedFlight = allFlights.find(f => f.id === proposal.proposed_flight_id);
 
-    if (requestFlightIdx !== -1 && proposedFlightIdx !== -1) {
-      // Trade the owners of these flights
-      const originalOwner = allFlights[requestFlightIdx].pilot_id;
-      const newOwner = allFlights[proposedFlightIdx].pilot_id;
+    if (requestFlight && proposedFlight) {
+      // Trade the owners of all flights on these days
+      const originalOwner = requestFlight.pilot_id;
+      const newOwner = proposedFlight.pilot_id;
 
-      allFlights[requestFlightIdx].pilot_id = newOwner;
-      allFlights[proposedFlightIdx].pilot_id = originalOwner;
+      const requestDay = requestFlight.day_number;
+      const proposedDay = proposedFlight.day_number;
+
+      allFlights.forEach(f => {
+        if (f.pilot_id === originalOwner && f.day_number === requestDay && f.duty_type === 'flight') {
+          f.pilot_id = newOwner;
+        } else if (f.pilot_id === newOwner && f.day_number === proposedDay && f.duty_type === 'flight') {
+          f.pilot_id = originalOwner;
+        }
+      });
 
       db.saveFlights(allFlights);
     }

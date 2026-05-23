@@ -146,15 +146,23 @@ export default function ChatRoom() {
 
     // Execute swap transaction: trade flight owners
     const allFlights = db.getFlights();
-    const myIdx = allFlights.findIndex(f => f.id === myFlight.id);
-    const partIdx = allFlights.findIndex(f => f.id === partnerFlight.id);
+    
+    // Trade the owners of all flights on these days
+    const originalOwner = myFlight.pilot_id;
+    const newOwner = partnerFlight.pilot_id;
 
-    if (myIdx !== -1 && partIdx !== -1) {
-      const tempOwner = allFlights[myIdx].pilot_id;
-      allFlights[myIdx].pilot_id = allFlights[partIdx].pilot_id;
-      allFlights[partIdx].pilot_id = tempOwner;
-      db.saveFlights(allFlights);
-    }
+    const requestDay = myFlight.day_number;
+    const proposedDay = partnerFlight.day_number;
+
+    allFlights.forEach(f => {
+      if (f.pilot_id === originalOwner && f.day_number === requestDay && f.duty_type === 'flight') {
+        f.pilot_id = newOwner;
+      } else if (f.pilot_id === newOwner && f.day_number === proposedDay && f.duty_type === 'flight') {
+        f.pilot_id = originalOwner;
+      }
+    });
+
+    db.saveFlights(allFlights);
 
     // Set proposal to accepted
     db.updateProposalStatus(proposal.id, 'accepted');
