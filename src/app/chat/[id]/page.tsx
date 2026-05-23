@@ -21,9 +21,26 @@ export default function ChatRoom() {
   const [proposal, setProposal] = useState<SwapProposal | null>(null);
   const [myFlight, setMyFlight] = useState<FlightDuty | null>(null);
   const [partnerFlight, setPartnerFlight] = useState<FlightDuty | null>(null);
+  const [myFlightGroup, setMyFlightGroup] = useState<FlightDuty[]>([]);
+  const [partnerFlightGroup, setPartnerFlightGroup] = useState<FlightDuty[]>([]);
   const [swapSuccess, setSwapSuccess] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Helper to construct roundtrip routes
+  const getGroupRoute = (group: FlightDuty[]) => {
+    if (group[0]?.duty_type !== 'flight') return '';
+    const airports: string[] = [];
+    group.forEach(g => {
+      if (g.origin && (airports.length === 0 || airports[airports.length - 1] !== g.origin)) {
+        airports.push(g.origin);
+      }
+      if (g.destination && (airports.length === 0 || airports[airports.length - 1] !== g.destination)) {
+        airports.push(g.destination);
+      }
+    });
+    return `(${airports.join(' → ')})`;
+  };
 
   // Parse room ID room-id1--id2 dynamically
   const parseRoomIds = (idStr: string): { id1: string; id2: string } | null => {
@@ -101,14 +118,32 @@ export default function ChatRoom() {
     const flights = db.getFlights();
     const req = requests.find(r => r.id === activeProp.request_id);
     
+    let proposerFlight: FlightDuty | null = null;
+    let receiverFlight: FlightDuty | null = null;
+
     if (me.id === activeProp.proposer_id) {
-      // I am the proposer
-      setMyFlight(flights.find(f => f.id === activeProp.proposed_flight_id) || null);
-      setPartnerFlight(flights.find(f => f.id === req?.flight_id) || null);
+      proposerFlight = flights.find(f => f.id === activeProp.proposed_flight_id) || null;
+      receiverFlight = flights.find(f => f.id === req?.flight_id) || null;
     } else {
-      // I am the receiver
-      setMyFlight(flights.find(f => f.id === req?.flight_id) || null);
-      setPartnerFlight(flights.find(f => f.id === activeProp.proposed_flight_id) || null);
+      receiverFlight = flights.find(f => f.id === req?.flight_id) || null;
+      proposerFlight = flights.find(f => f.id === activeProp.proposed_flight_id) || null;
+    }
+
+    const myF = me.id === activeProp.proposer_id ? proposerFlight : receiverFlight;
+    const partnerF = me.id === activeProp.proposer_id ? receiverFlight : proposerFlight;
+
+    setMyFlight(myF);
+    setPartnerFlight(partnerF);
+
+    if (myF && partnerF) {
+      const myG = flights.filter(f => f.pilot_id === me.id && f.day_number === myF.day_number && (f.duty_type === 'flight' || f.duty_type === 'standby'));
+      const partnerG = flights.filter(f => f.pilot_id === partnerId && f.day_number === partnerF.day_number && (f.duty_type === 'flight' || f.duty_type === 'standby'));
+      
+      setMyFlightGroup(myG);
+      setPartnerFlightGroup(partnerG);
+    } else {
+      setMyFlightGroup([]);
+      setPartnerFlightGroup([]);
     }
 
     loadMessages();
@@ -176,6 +211,12 @@ export default function ChatRoom() {
 
   if (!currentPilot || !partnerPilot) return null;
 
+  const myFlightNumbers = myFlightGroup.map(t => t.flight_number).filter(Boolean).join(' / ') || (myFlight?.duty_type || '').toUpperCase();
+  const partnerFlightNumbers = partnerFlightGroup.map(t => t.flight_number).filter(Boolean).join(' / ') || (partnerFlight?.duty_type || '').toUpperCase();
+
+  const myRoute = getGroupRoute(myFlightGroup);
+  const partnerRoute = getGroupRoute(partnerFlightGroup);
+
   return (
     <div className="flex-1 flex flex-col max-w-4xl w-full mx-auto p-4 md:p-6 space-y-4">
       {/* Header panel */}
@@ -197,13 +238,15 @@ export default function ChatRoom() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <div className="flex items-center gap-1.5 font-bold text-neutral-800">
-                <span className="text-primary">{myFlight.flight_number || myFlight.duty_type}</span>
-                <span className="text-xs text-neutral-400">({myFlight.origin || 'OFF'} → {myFlight.destination || 'OFF'})</span>
+                <span className="text-primary">{myFlightNumbers}</span>
+                {myRoute && <span className="text-xs text-neutral-400">{myRoute}</span>}
+                <span className="text-xs text-neutral-400 font-normal">on May {myFlight.day_number}</span>
               </div>
               <ArrowRightLeft size={14} className="text-neutral-400 mx-1" />
               <div className="flex items-center gap-1.5 font-bold text-neutral-800">
-                <span className="text-cta">{partnerFlight.flight_number || partnerFlight.duty_type}</span>
-                <span className="text-xs text-neutral-400">({partnerFlight.origin || 'OFF'} → {partnerFlight.destination || 'OFF'})</span>
+                <span className="text-cta">{partnerFlightNumbers}</span>
+                {partnerRoute && <span className="text-xs text-neutral-400">{partnerRoute}</span>}
+                <span className="text-xs text-neutral-400 font-normal">on May {partnerFlight.day_number}</span>
               </div>
             </div>
 

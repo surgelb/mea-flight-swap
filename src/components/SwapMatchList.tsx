@@ -49,6 +49,31 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
     return allFlights.find(f => f.id === flightId);
   };
 
+  const getGroupRoute = (group: FlightDuty[]) => {
+    if (group[0]?.duty_type !== 'flight') return '';
+    const airports: string[] = [];
+    group.forEach(g => {
+      if (g.origin && (airports.length === 0 || airports[airports.length - 1] !== g.origin)) {
+        airports.push(g.origin);
+      }
+      if (g.destination && (airports.length === 0 || airports[airports.length - 1] !== g.destination)) {
+        airports.push(g.destination);
+      }
+    });
+    return `(${airports.join(' → ')})`;
+  };
+
+  const groupedMyFlights = React.useMemo(() => {
+    const groups: Record<number, FlightDuty[]> = {};
+    myFlights.forEach(f => {
+      if (f.duty_type === 'flight' || f.duty_type === 'standby') {
+        if (!groups[f.day_number]) groups[f.day_number] = [];
+        groups[f.day_number].push(f);
+      }
+    });
+    return Object.values(groups).sort((a, b) => a[0].day_number - b[0].day_number);
+  }, [myFlights]);
+
   const handleProposeClick = (req: SwapRequest) => {
     setSelectedRequest(req);
     setSelectedMyFlight(null);
@@ -114,12 +139,6 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
     setSelectedRequest(null);
   };
 
-  const formatDateTime = (isoString: string | null) => {
-    if (!isoString) return '';
-    const date = new Date(isoString);
-    return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`;
-  };
-
   return (
     <div className="space-y-4">
       {requests.length === 0 ? (
@@ -131,6 +150,9 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
           {requests.map(req => {
             const pilot = getPilotInfo(req.pilot_id);
             const flight = getFlightInfo(req.flight_id);
+            const targetFlights = allFlights.filter(f => f.pilot_id === req.pilot_id && f.day_number === flight?.day_number && (f.duty_type === 'flight' || f.duty_type === 'standby'));
+            const targetFlightNumbers = targetFlights.map(t => t.flight_number).filter(Boolean).join(' / ');
+            const totalTargetBlockTime = targetFlights.reduce((sum, g) => sum + (g.block_time_mins || 0), 0);
             const isMine = req.pilot_id === db.getCurrentPilotId();
 
             if (!pilot || !flight) return null;
@@ -165,19 +187,19 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
                         <ArrowRightLeft size={18} />
                       </div>
                       <div>
-                        <span className="text-xs text-neutral-400 font-medium">Wants to Give Away</span>
+                        <span className="text-xs text-neutral-400 font-medium">Wants to Give Away (Roundtrip Day Group)</span>
                         <div className="flex items-baseline gap-2">
                           <h4 className="text-sm font-heading font-bold text-neutral-800">
-                            {flight.flight_number || flight.duty_type.toUpperCase()}
+                            {targetFlightNumbers || flight.duty_type.toUpperCase()}
                           </h4>
-                          {flight.origin && (
+                          {flight.duty_type === 'flight' && (
                             <span className="text-xs text-neutral-600 font-medium">
-                              ({flight.origin} → {flight.destination})
+                              {getGroupRoute(targetFlights)}
                             </span>
                           )}
                         </div>
                         <p className="text-xs text-neutral-500">
-                          {flight.reporting_time ? formatDateTime(flight.reporting_time) : `Day ${flight.day_number}`}
+                          May {flight.day_number} {totalTargetBlockTime > 0 && `• Block Time: ${Math.floor(totalTargetBlockTime / 60)}h ${totalTargetBlockTime % 60}m`}
                         </p>
                       </div>
                     </div>
@@ -246,36 +268,44 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
                 Select a duty from your roster to offer
               </span>
               <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                {myFlights.map(f => (
-                  <button
-                    key={f.id}
-                    onClick={() => handleSelectMyFlight(f)}
-                    className={`w-full text-left p-3 rounded-xl border text-xs transition-all flex justify-between items-center cursor-pointer ${
-                      selectedMyFlight?.id === f.id
-                        ? 'border-primary bg-primary/5 shadow-md shadow-primary/5'
-                        : 'border-border hover:border-primary bg-white/40'
-                    }`}
-                  >
-                    <div>
-                      <span className="font-heading font-semibold text-neutral-800">
-                        {f.flight_number || f.duty_type.toUpperCase()}
-                      </span>
-                      {f.origin && (
-                        <span className="text-neutral-500 ml-1">
-                          ({f.origin} → {f.destination})
+                {groupedMyFlights.map(group => {
+                  const representative = group[0];
+                  const flightNumbers = group.map(f => f.flight_number).filter(Boolean).join(' / ') || representative.duty_type.toUpperCase();
+                  const route = getGroupRoute(group);
+                  const totalBlockTime = group.reduce((sum, f) => sum + (f.block_time_mins || 0), 0);
+                  const isSelected = selectedMyFlight?.day_number === representative.day_number;
+
+                  return (
+                    <button
+                      key={representative.id}
+                      onClick={() => handleSelectMyFlight(representative)}
+                      className={`w-full text-left p-3 rounded-xl border text-xs transition-all flex justify-between items-center cursor-pointer ${
+                        isSelected
+                          ? 'border-primary bg-primary/5 shadow-md shadow-primary/5'
+                          : 'border-border hover:border-primary bg-white/40'
+                      }`}
+                    >
+                      <div>
+                        <span className="font-heading font-semibold text-neutral-800">
+                          {flightNumbers}
+                        </span>
+                        {route && (
+                          <span className="text-neutral-500 ml-1">
+                            {route}
+                          </span>
+                        )}
+                        <p className="text-[10px] text-neutral-400 mt-0.5">
+                          May {representative.day_number} • {representative.reporting_time ? new Date(representative.reporting_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}) : 'All Day'}
+                        </p>
+                      </div>
+                      {totalBlockTime > 0 && (
+                        <span className="text-neutral-500 font-mono text-[10px]">
+                          {Math.floor(totalBlockTime / 60)}h {totalBlockTime % 60}m
                         </span>
                       )}
-                      <p className="text-[10px] text-neutral-400 mt-0.5">
-                        May {f.day_number} • {f.reporting_time ? new Date(f.reporting_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}) : 'All Day'}
-                      </p>
-                    </div>
-                    {f.block_time_mins && (
-                      <span className="text-neutral-500 font-mono text-[10px]">
-                        {Math.floor(f.block_time_mins / 60)}h {f.block_time_mins % 60}m
-                      </span>
-                    )}
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

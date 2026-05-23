@@ -49,6 +49,31 @@ export default function Dashboard() {
     notes: string;
   } | null>(null);
 
+  const getGroupRoute = (group: FlightDuty[]) => {
+    if (group[0]?.duty_type !== 'flight') return '';
+    const airports: string[] = [];
+    group.forEach(g => {
+      if (g.origin && (airports.length === 0 || airports[airports.length - 1] !== g.origin)) {
+        airports.push(g.origin);
+      }
+      if (g.destination && (airports.length === 0 || airports[airports.length - 1] !== g.destination)) {
+        airports.push(g.destination);
+      }
+    });
+    return `(${airports.join(' → ')})`;
+  };
+
+  const groupedMyFlights = React.useMemo(() => {
+    const groups: Record<number, FlightDuty[]> = {};
+    flights.forEach(f => {
+      if (f.duty_type === 'flight' || f.duty_type === 'standby') {
+        if (!groups[f.day_number]) groups[f.day_number] = [];
+        groups[f.day_number].push(f);
+      }
+    });
+    return Object.values(groups).sort((a, b) => a[0].day_number - b[0].day_number);
+  }, [flights]);
+
   // Proposals & Chat alerts
   const [incomingProposals, setIncomingProposals] = useState<SwapProposal[]>([]);
   const [outgoingProposals, setOutgoingProposals] = useState<SwapProposal[]>([]);
@@ -328,6 +353,12 @@ export default function Dashboard() {
 
           if (!proposer || !myFlight || !requesterFlight) return null;
 
+          const allFlightsOnRequesterDay = db.getFlights().filter(f => f.pilot_id === prop.proposer_id && f.day_number === requesterFlight.day_number && (f.duty_type === 'flight' || f.duty_type === 'standby'));
+          const allFlightsOnMyDay = db.getFlights().filter(f => f.pilot_id === pilot.id && f.day_number === myFlight.day_number && (f.duty_type === 'flight' || f.duty_type === 'standby'));
+
+          const requesterFlightNumbers = allFlightsOnRequesterDay.map(f => f.flight_number).filter(Boolean).join(' / ') || requesterFlight.duty_type.toUpperCase();
+          const myFlightNumbers = allFlightsOnMyDay.map(f => f.flight_number).filter(Boolean).join(' / ') || myFlight.duty_type.toUpperCase();
+
           return (
             <motion.div
               key={prop.id}
@@ -343,7 +374,7 @@ export default function Dashboard() {
                       Incoming Swap Proposal from {proposer.name}
                     </h4>
                     <p className="text-xs text-neutral-600 mt-1">
-                      They offer their <strong className="text-primary">{requesterFlight.flight_number || requesterFlight.duty_type}</strong> (May {requesterFlight.day_number}) in trade for your <strong className="text-cta">{myFlight.flight_number || myFlight.duty_type}</strong> (May {myFlight.day_number}).
+                      They offer their <strong className="text-primary">{requesterFlightNumbers}</strong> (May {requesterFlight.day_number}) in trade for your <strong className="text-cta">{myFlightNumbers}</strong> (May {myFlight.day_number}).
                     </p>
                     <p className="text-[10px] text-neutral-500 italic mt-1.5">
                       Safety Advisor: &ldquo;{prop.legality_notes}&rdquo;
@@ -499,14 +530,21 @@ export default function Dashboard() {
         {selectedFlightForSwap && (
           <form onSubmit={handleCreateSwapRequestSubmit} className="space-y-4">
             <div>
-              <span className="text-xs text-neutral-400 uppercase font-semibold">Selected Roster Item</span>
-              <div className="mt-2 p-3 bg-background/80 rounded-2xl border border-border text-xs">
-                <strong>{selectedFlightForSwap.flight_number || selectedFlightForSwap.duty_type.toUpperCase()}</strong>
-                {selectedFlightForSwap.origin && ` (${selectedFlightForSwap.origin} → ${selectedFlightForSwap.destination})`}
-                <p className="text-[10px] text-neutral-400 mt-1">
-                  May {selectedFlightForSwap.day_number} • Block Time: {selectedFlightForSwap.block_time_mins ? `${Math.floor(selectedFlightForSwap.block_time_mins / 60)}h ${selectedFlightForSwap.block_time_mins % 60}m` : 'N/A'}
-                </p>
-              </div>
+              <span className="text-xs text-neutral-400 uppercase font-semibold">Selected Roster Item (Roundtrip Day Group)</span>
+              {(() => {
+                const dayFlights = flights.filter(f => f.day_number === selectedFlightForSwap.day_number && (f.duty_type === 'flight' || f.duty_type === 'standby'));
+                const flightNumbers = dayFlights.map(t => t.flight_number).filter(Boolean).join(' / ');
+                const totalBlockTime = dayFlights.reduce((sum, g) => sum + (g.block_time_mins || 0), 0);
+                return (
+                  <div className="mt-2 p-3 bg-background/80 rounded-2xl border border-border text-xs">
+                    <strong>{flightNumbers || selectedFlightForSwap.duty_type.toUpperCase()}</strong>
+                    {selectedFlightForSwap.duty_type === 'flight' && ` ${getGroupRoute(dayFlights)}`}
+                    <p className="text-[10px] text-neutral-400 mt-1">
+                      May {selectedFlightForSwap.day_number} • Total Block Time: {totalBlockTime ? `${Math.floor(totalBlockTime / 60)}h ${totalBlockTime % 60}m` : 'N/A'}
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="space-y-1">
@@ -561,51 +599,64 @@ export default function Dashboard() {
               <p className="text-sm font-semibold text-neutral-800">
                 {directTargetPilot.name}
               </p>
-              <div className="mt-2 p-3 bg-background/40 rounded-2xl border border-border text-xs">
-                <strong>Their Duty:</strong> {directTargetFlight.flight_number || directTargetFlight.duty_type.toUpperCase()} 
-                {directTargetFlight.origin && ` (${directTargetFlight.origin} → ${directTargetFlight.destination})`}
-                <p className="text-[10px] text-neutral-500 mt-1">
-                  May {directTargetFlight.day_number} • Block Time: {directTargetFlight.block_time_mins ? `${Math.floor(directTargetFlight.block_time_mins / 60)}h ${directTargetFlight.block_time_mins % 60}m` : 'N/A'}
-                </p>
-              </div>
+              {(() => {
+                const targetFlights = db.getFlights().filter(f => f.pilot_id === directTargetPilot.id && f.day_number === directTargetFlight.day_number && (f.duty_type === 'flight' || f.duty_type === 'standby'));
+                const flightNumbers = targetFlights.map(t => t.flight_number).filter(Boolean).join(' / ');
+                const totalBlockTime = targetFlights.reduce((sum, g) => sum + (g.block_time_mins || 0), 0);
+                return (
+                  <div className="mt-2 p-3 bg-background/40 rounded-2xl border border-border text-xs">
+                    <strong>Their Duty (Roundtrip Day Group):</strong> {flightNumbers || directTargetFlight.duty_type.toUpperCase()}
+                    {directTargetFlight.duty_type === 'flight' && ` ${getGroupRoute(targetFlights)}`}
+                    <p className="text-[10px] text-neutral-500 mt-1">
+                      May {directTargetFlight.day_number} • Total Block Time: {totalBlockTime ? `${Math.floor(totalBlockTime / 60)}h ${totalBlockTime % 60}m` : 'N/A'}
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
 
             <div>
               <span className="text-xs text-neutral-400 uppercase font-semibold block mb-2">
-                Select a duty from your roster to offer in trade
+                Select a duty from your roster to offer in trade (Roundtrip Day Groups)
               </span>
               <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1 scrollbar-thin">
-                {flights.filter(f => f.duty_type === 'flight' || f.duty_type === 'standby').map(f => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => handleSelectMyFlightForDirect(f)}
-                    className={`w-full text-left p-3 rounded-xl border text-xs transition-all flex justify-between items-center cursor-pointer ${
-                      selectedMyFlightForDirect?.id === f.id
-                        ? 'border-primary bg-primary/5 shadow-md shadow-primary/5'
-                        : 'border-border hover:border-primary bg-white/40'
-                    }`}
-                  >
-                    <div>
-                      <span className="font-heading font-semibold text-neutral-800">
-                        {f.flight_number || f.duty_type.toUpperCase()}
-                      </span>
-                      {f.origin && (
-                        <span className="text-neutral-500 ml-1">
-                          ({f.origin} → {f.destination})
+                {groupedMyFlights.map(group => {
+                  const f = group[0];
+                  const isSelected = selectedMyFlightForDirect?.day_number === f.day_number;
+                  const flightNumbers = group.map(g => g.flight_number).filter(Boolean).join(' / ');
+                  const totalBlockTime = group.reduce((sum, g) => sum + (g.block_time_mins || 0), 0);
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => handleSelectMyFlightForDirect(f)}
+                      className={`w-full text-left p-3 rounded-xl border text-xs transition-all flex justify-between items-center cursor-pointer ${
+                        isSelected
+                          ? 'border-primary bg-primary/5 shadow-md shadow-primary/5'
+                          : 'border-border hover:border-primary bg-white/40'
+                      }`}
+                    >
+                      <div>
+                        <span className="font-heading font-semibold text-neutral-800">
+                          {flightNumbers || f.duty_type.toUpperCase()}
+                        </span>
+                        {f.duty_type === 'flight' && (
+                          <span className="text-neutral-500 ml-1">
+                            {getGroupRoute(group)}
+                          </span>
+                        )}
+                        <p className="text-[10px] text-neutral-400 mt-0.5">
+                          May {f.day_number}
+                        </p>
+                      </div>
+                      {totalBlockTime > 0 && (
+                        <span className="text-neutral-500 font-mono text-[10px]">
+                          {Math.floor(totalBlockTime / 60)}h {totalBlockTime % 60}m
                         </span>
                       )}
-                      <p className="text-[10px] text-neutral-400 mt-0.5">
-                        May {f.day_number}
-                      </p>
-                    </div>
-                    {f.block_time_mins && (
-                      <span className="text-neutral-500 font-mono text-[10px]">
-                        {Math.floor(f.block_time_mins / 60)}h {f.block_time_mins % 60}m
-                      </span>
-                    )}
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
