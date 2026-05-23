@@ -92,3 +92,20 @@ create table public.chat_messages (
 alter table public.chat_messages enable row level security;
 create policy "Allow public read access to chat_messages" on public.chat_messages for select using (true);
 create policy "Allow all write access to chat_messages" on public.chat_messages for all using (true) with check (true);
+
+-- 6. TRIGGERS FOR AUTOMATIC CLEANUP
+-- Trigger to automatically delete a public profile when the auth user is deleted
+create or replace function public.handle_delete_user()
+returns trigger as $$
+begin
+    delete from public.profiles where id = old.id;
+    return old;
+end;
+$$ language plpgsql security definer;
+
+-- Drop trigger if exists
+drop trigger if exists on_auth_user_deleted on auth.users;
+
+create trigger on_auth_user_deleted
+    after delete on auth.users
+    for each row execute procedure public.handle_delete_user();
