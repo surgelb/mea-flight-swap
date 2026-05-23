@@ -133,13 +133,18 @@ export async function POST(req: Request) {
         - duty_type: "training"
         - flight_number: description
       
-      CRITICAL DEDUPLICATION RULE:
-      The PDF text extracted might repeat information multiple times (e.g. once in the grid and again in a detailed summary list at the bottom). You MUST ensure you DO NOT output duplicate duties.
-      - For each calendar day, there should only be one main duty category.
+      CRITICAL DEDUPLICATION AND MERGING RULE:
+      The PDF text extracted might repeat information multiple times. You MUST ensure you DO NOT output duplicate duties, and you MUST guarantee exactly one duty row per calendar day.
+      - For each calendar day, there should only be one main duty category (and exactly one object in the "duties" array).
       - If a day contains a flight or simulator/training duty, DO NOT output any standby or day-off ("off") duties for that day.
-      - Do not output the exact same flight leg (same flight number, origin, destination, and times) twice.
-      - A day can have multiple duties only if they are distinct flight legs (e.g., flight ME201 and ME202 on the same day).
-      Deduplicate all duties thoroughly before returning.
+      - If a day contains multiple distinct flight legs (e.g., a roundtrip ME201 and ME202 on the same day), you MUST combine them into a single flight duty for that day:
+        - flight_number: combine numbers with a slash (e.g. "ME201/ME202")
+        - origin: origin of the first flight (e.g. "BEY")
+        - destination: destination of the first flight (e.g. "LHR")
+        - departure_time: combine calendar day date and departure time of the first flight
+        - arrival_time: combine calendar day date and arrival time of the last flight
+        - aircraft_type: combine aircraft types if different (e.g. "A321/A320")
+      Deduplicate and merge all duties thoroughly so that you return exactly one duty object per day.
       
       Return a valid JSON object matching this schema:
       {

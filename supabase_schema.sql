@@ -5,7 +5,7 @@ create extension if not exists "uuid-ossp";
 drop table if exists public.chat_messages cascade;
 drop table if exists public.swap_proposals cascade;
 drop table if exists public.swap_requests cascade;
-drop table if exists public.flight_duties cascade;
+drop table if exists public.schedules cascade;
 drop table if exists public.profiles cascade;
 
 -- 1. PROFILES TABLE
@@ -24,10 +24,10 @@ alter table public.profiles enable row level security;
 create policy "Allow public read access to profiles" on public.profiles for select using (true);
 create policy "Allow all write access to profiles" on public.profiles for all using (true) with check (true);
 
--- 2. FLIGHT DUTIES TABLE
-create table public.flight_duties (
+-- 2. SCHEDULES TABLE
+create table public.schedules (
     id text primary key,
-    pilot_id text references public.profiles(id) on delete cascade,
+    user_id text references public.profiles(id) on delete cascade,
     duty_type text not null check (duty_type in ('flight', 'standby', 'simulator', 'off', 'training')),
     flight_number text,
     origin text,
@@ -38,18 +38,20 @@ create table public.flight_duties (
     release_time timestamptz,
     block_time_mins integer,
     aircraft_type text,
-    day_number integer not null
+    day_number integer not null,
+    date date not null,
+    unique (user_id, date)
 );
 
-alter table public.flight_duties enable row level security;
-create policy "Allow public read access to flight_duties" on public.flight_duties for select using (true);
-create policy "Allow all write access to flight_duties" on public.flight_duties for all using (true) with check (true);
+alter table public.schedules enable row level security;
+create policy "Allow public read access to schedules" on public.schedules for select using (true);
+create policy "Allow all write access to schedules" on public.schedules for all using (true) with check (true);
 
 -- 3. SWAP REQUESTS TABLE
 create table public.swap_requests (
     id text primary key,
     pilot_id text references public.profiles(id) on delete cascade,
-    flight_id text references public.flight_duties(id) on delete cascade,
+    flight_id text references public.schedules(id) on delete cascade,
     preferred_destination text not null,
     preferred_date_range_start text not null,
     preferred_date_range_end text not null,
@@ -67,7 +69,7 @@ create table public.swap_proposals (
     id text primary key,
     request_id text references public.swap_requests(id) on delete cascade,
     proposer_id text references public.profiles(id) on delete cascade,
-    proposed_flight_id text references public.flight_duties(id) on delete cascade,
+    proposed_flight_id text references public.schedules(id) on delete cascade,
     status text not null check (status in ('pending', 'accepted', 'rejected')),
     legality_check_passed boolean not null default true,
     legality_notes text,

@@ -129,28 +129,89 @@ class DB {
 
   private async syncFromSupabase() {
     try {
-      const syncTable = async (tableName: string, storageKey: string) => {
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      const syncProfiles = async () => {
         try {
-          const { data, error } = await supabase.from(tableName).select('*');
-          if (error) {
-            console.warn(`Supabase sync warning for table '${tableName}':`, error.message);
-            return;
-          }
+          const { data, error } = await supabase.from('profiles').select('*');
+          if (error) console.warn('Supabase sync warning for profiles:', error.message);
+          if (data) localStorage.setItem('mfs_profiles', JSON.stringify(data));
+        } catch (err) {
+          console.warn('Supabase sync exception for profiles:', err);
+        }
+      };
+
+      const syncSchedules = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('schedules')
+            .select('*')
+            .gte('date', todayStr);
+          if (error) console.warn('Supabase sync warning for schedules:', error.message);
           if (data) {
-            localStorage.setItem(storageKey, JSON.stringify(data));
+            // Map user_id to pilot_id for local state compatibility
+            const mapped = data.map((item: any) => ({ ...item, pilot_id: item.user_id }));
+            localStorage.setItem('mfs_flights', JSON.stringify(mapped));
           }
         } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          console.warn(`Supabase sync exception for table '${tableName}':`, errMsg);
+          console.warn('Supabase sync exception for schedules:', err);
+        }
+      };
+
+      const syncSwapRequests = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('swap_requests')
+            .select('*, schedules!inner(date)')
+            .gte('schedules.date', todayStr);
+          if (error) console.warn('Supabase sync warning for swap_requests:', error.message);
+          if (data) {
+            const cleaned = data.map((item: any) => {
+              const { schedules: _, ...rest } = item;
+              return rest;
+            });
+            localStorage.setItem('mfs_swaps', JSON.stringify(cleaned));
+          }
+        } catch (err) {
+          console.warn('Supabase sync exception for swap_requests:', err);
+        }
+      };
+
+      const syncSwapProposals = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('swap_proposals')
+            .select('*, swap_requests!inner(schedules!inner(date))')
+            .gte('swap_requests.schedules.date', todayStr);
+          if (error) console.warn('Supabase sync warning for swap_proposals:', error.message);
+          if (data) {
+            const cleaned = data.map((item: any) => {
+              const { swap_requests: _, ...rest } = item;
+              return rest;
+            });
+            localStorage.setItem('mfs_proposals', JSON.stringify(cleaned));
+          }
+        } catch (err) {
+          console.warn('Supabase sync exception for swap_proposals:', err);
+        }
+      };
+
+      const syncChatMessages = async () => {
+        try {
+          const { data, error } = await supabase.from('chat_messages').select('*');
+          if (error) console.warn('Supabase sync warning for chat_messages:', error.message);
+          if (data) localStorage.setItem('mfs_messages', JSON.stringify(data));
+        } catch (err) {
+          console.warn('Supabase sync exception for chat_messages:', err);
         }
       };
 
       await Promise.all([
-        syncTable('profiles', 'mfs_profiles'),
-        syncTable('flight_duties', 'mfs_flights'),
-        syncTable('swap_requests', 'mfs_swaps'),
-        syncTable('swap_proposals', 'mfs_proposals'),
-        syncTable('chat_messages', 'mfs_messages')
+        syncProfiles(),
+        syncSchedules(),
+        syncSwapRequests(),
+        syncSwapProposals(),
+        syncChatMessages()
       ]);
     } catch (err) {
       console.warn('Supabase sync main execution error:', err);
@@ -313,37 +374,37 @@ class DB {
           );
         }
 
-        // Remove exact duplicates
-        const seenKeys = new Set<string>();
-        const uniqueDayDuties: FlightDuty[] = [];
+        const flightDuties = filtered.filter(d => d.duty_type === 'flight');
+        if (flightDuties.length > 0) {
+          // Sort flights by departure_time
+          flightDuties.sort((a, b) => (a.departure_time || '').localeCompare(b.departure_time || ''));
+          
+          const firstFlight = flightDuties[0];
+          const lastFlight = flightDuties[flightDuties.length - 1];
+          const combinedFlightNumber = flightDuties.map(d => d.flight_number).filter(Boolean).join('/');
+          const combinedBlockTime = flightDuties.reduce((sum, d) => sum + (d.block_time_mins || 0), 0);
+          const combinedAircraftType = flightDuties.map(d => d.aircraft_type).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join('/');
 
-        for (const duty of filtered) {
-          let key = '';
-          if (duty.duty_type === 'flight') {
-            const fNum = (duty.flight_number || '').trim().toUpperCase();
-            const orig = (duty.origin || '').trim().toUpperCase();
-            const dest = (duty.destination || '').trim().toUpperCase();
-            const depTime = (duty.departure_time || '').trim();
-            key = `flight-${fNum}-${orig}-${dest}-${depTime}`;
-          } else if (duty.duty_type === 'standby') {
-            const repTime = (duty.reporting_time || '').trim();
-            const relTime = (duty.release_time || '').trim();
-            key = `standby-${repTime}-${relTime}`;
-          } else if (duty.duty_type === 'off') {
-            key = `off`;
-          } else {
-            const fNum = (duty.flight_number || '').trim().toUpperCase();
-            const depTime = (duty.departure_time || '').trim();
-            key = `${duty.duty_type}-${fNum}-${depTime}`;
-          }
+          // Turnaround point: destination of the first flight
+          const combinedDestination = firstFlight.destination;
 
-          if (!seenKeys.has(key)) {
-            seenKeys.add(key);
-            uniqueDayDuties.push(duty);
+          const combinedDuty: FlightDuty = {
+            ...firstFlight,
+            flight_number: combinedFlightNumber,
+            destination: combinedDestination,
+            arrival_time: lastFlight.arrival_time,
+            release_time: lastFlight.release_time,
+            block_time_mins: combinedBlockTime || null,
+            aircraft_type: combinedAircraftType || null
+          };
+          finalDuties.push(combinedDuty);
+        } else {
+          // Take the first non-flight duty for the day
+          const nonFlight = filtered[0];
+          if (nonFlight) {
+            finalDuties.push(nonFlight);
           }
         }
-
-        finalDuties.push(...uniqueDayDuties);
       }
     }
 
@@ -371,23 +432,28 @@ class DB {
 
     if (hasSupabase) {
       try {
-        // Delete existing flight duties in Supabase first
-        const { error: deleteError } = await supabase
-          .from('flight_duties')
-          .delete()
-          .in('pilot_id', pilotIds);
+        // Map fields to match schedules table (pilot_id -> user_id, add date)
+        const schedulesData = dedupedNewFlights.map(f => {
+          const { pilot_id, ...rest } = f;
+          const date = f.departure_time 
+            ? f.departure_time.split('T')[0] 
+            : (f.reporting_time 
+                ? f.reporting_time.split('T')[0] 
+                : `2026-05-${String(f.day_number).padStart(2, '0')}`);
+          return {
+            ...rest,
+            user_id: pilot_id,
+            date
+          };
+        });
 
-        if (deleteError) {
-          console.error('Supabase delete error (flight_duties):', deleteError);
-        }
-
-        // Upsert the new flights
+        // Upsert new flights, overwriting existing user_id/date entries
         const { error: upsertError } = await supabase
-          .from('flight_duties')
-          .upsert(dedupedNewFlights);
+          .from('schedules')
+          .upsert(schedulesData, { onConflict: 'user_id, date' });
 
         if (upsertError) {
-          console.error('Supabase write error (flight_duties):', upsertError);
+          console.error('Supabase write error (schedules):', upsertError);
         }
       } catch (err) {
         console.error('Supabase saveFlights exception:', err);
@@ -403,9 +469,9 @@ class DB {
     if (hasSupabase) {
       try {
         const { error } = await supabase
-          .from('flight_duties')
+          .from('schedules')
           .delete()
-          .eq('pilot_id', pilotId);
+          .eq('user_id', pilotId);
         if (error) {
           console.error('Supabase delete error (clearFlightsForPilot):', error);
         }

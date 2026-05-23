@@ -425,22 +425,29 @@ export function parseRosterTextProgrammatic(text: string): RosterParseResult | n
           }
         }
         
-        event.flights?.forEach((fl) => {
-          if (currentDay <= daysInMonth) {
-            alignedDuties.push({
-              day_number: currentDay,
-              duty_type: 'flight',
-              flight_number: fl.flight_number,
-              origin: fl.origin,
-              destination: fl.destination,
-              departure_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.departure_time}:00Z`,
-              arrival_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.arrival_time}:00Z`,
-              reporting_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.departure_time}:00Z`,
-              release_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.arrival_time}:00Z`,
-              aircraft_type: fl.aircraft_type
-            });
-          }
-        });
+        const flights = event.flights || [];
+        if (flights.length > 0 && currentDay <= daysInMonth) {
+          const firstFlight = flights[0];
+          const lastFlight = flights[flights.length - 1];
+          const combinedFlightNumber = flights.map(f => f.flight_number).filter(Boolean).join('/');
+          const combinedAircraftType = flights.map(f => f.aircraft_type).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join('/');
+
+          // Turnaround destination: destination of the first leg
+          const combinedDestination = firstFlight.destination;
+
+          alignedDuties.push({
+            day_number: currentDay,
+            duty_type: 'flight',
+            flight_number: combinedFlightNumber,
+            origin: firstFlight.origin,
+            destination: combinedDestination,
+            departure_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${firstFlight.departure_time}:00Z`,
+            arrival_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${lastFlight.arrival_time}:00Z`,
+            reporting_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${firstFlight.departure_time}:00Z`,
+            release_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${lastFlight.arrival_time}:00Z`,
+            aircraft_type: combinedAircraftType || null
+          });
+        }
         currentDay++;
       } else if (event.type === 'training') {
         const knownDay = getKnownDateForTraining(event, currentDay);

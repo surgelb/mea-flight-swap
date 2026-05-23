@@ -25,12 +25,28 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
   useEffect(() => {
     // Load initial listings asynchronously to avoid cascading renders warning
     const timer = setTimeout(() => {
-      setRequests(db.getSwapRequests().filter(r => r.status === 'open'));
+      const todayStr = new Date().toISOString().split('T')[0];
+      const flightsRaw = db.getFlights();
+      const futureFlights = flightsRaw.filter(f => {
+        const fDate = (f as any).date || (f.departure_time ? f.departure_time.split('T')[0] : (f.reporting_time ? f.reporting_time.split('T')[0] : `2026-05-${String(f.day_number).padStart(2, '0')}`));
+        return fDate >= todayStr;
+      });
+      setAllFlights(futureFlights);
+
+      const openRequests = db.getSwapRequests().filter(r => {
+        if (r.status !== 'open') return false;
+        const flight = flightsRaw.find(f => f.id === r.flight_id);
+        if (!flight) return false;
+        const fDate = (flight as any).date || (flight.departure_time ? flight.departure_time.split('T')[0] : (flight.reporting_time ? flight.reporting_time.split('T')[0] : `2026-05-${String(flight.day_number).padStart(2, '0')}`));
+        return fDate >= todayStr;
+      });
+      setRequests(openRequests);
+
       setProfiles(db.getProfiles());
-      setAllFlights(db.getFlights());
       
       const myId = db.getCurrentPilotId();
-      setMyFlights(db.getFlights(myId));
+      const myFutureFlights = futureFlights.filter(f => f.pilot_id === myId);
+      setMyFlights(myFutureFlights);
     }, 0);
     return () => clearTimeout(timer);
   }, []);

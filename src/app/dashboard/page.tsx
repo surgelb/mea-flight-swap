@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [selectedFlightForSwap, setSelectedFlightForSwap] = useState<FlightDuty | null>(null);
   const [preferredDest, setPreferredDest] = useState('');
   const [notes, setNotes] = useState('');
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   // Direct Swap States from Grid
   const [isDirectModalOpen, setIsDirectModalOpen] = useState(false);
@@ -80,7 +81,12 @@ export default function Dashboard() {
       return;
     }
     setPilot(currentPilot);
-    setFlights(db.getFlights(currentPilot.id).sort((a,b) => a.day_number - b.day_number));
+    const todayStr = new Date().toISOString().split('T')[0];
+    const futureFlights = db.getFlights(currentPilot.id).filter(f => {
+      const fDate = (f as any).date || (f.departure_time ? f.departure_time.split('T')[0] : (f.reporting_time ? f.reporting_time.split('T')[0] : `2026-05-${String(f.day_number).padStart(2, '0')}`));
+      return fDate >= todayStr;
+    }).sort((a,b) => a.day_number - b.day_number);
+    setFlights(futureFlights);
 
     // Load swap proposals
     const allRequests = db.getSwapRequests();
@@ -418,21 +424,18 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Action bar to upload new roster */}
+                   {/* Action bar to upload new roster */}
                   <div className="flex justify-between items-center bg-white/20 p-4 rounded-2xl border border-border">
                     <span className="text-xs text-neutral-500 font-medium">
-                      Showing {flights.length} roster duties. Drag new file to replace.
+                      Showing {flights.length} roster duties. Click to upload a new roster.
                     </span>
                     <Button 
-                      variant="ghost" 
+                      variant="primary" 
                       size="sm" 
-                      onClick={() => {
-                        db.clearFlightsForPilot(pilot.id);
-                        setFlights([]);
-                      }} 
+                      onClick={() => setIsUploadModalOpen(true)} 
                       className="text-xs"
                     >
-                      Reset Schedule
+                      Add New Roster
                     </Button>
                   </div>
                   
@@ -631,6 +634,22 @@ export default function Dashboard() {
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* Upload Roster Modal */}
+      <Modal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        title="Add New Roster"
+      >
+        <div className="p-1">
+          <RosterUploadZone
+            onUploadSuccess={(updatedPilot) => {
+              handleUploadSuccess(updatedPilot);
+              setIsUploadModalOpen(false);
+            }}
+          />
+        </div>
       </Modal>
     </div>
   );

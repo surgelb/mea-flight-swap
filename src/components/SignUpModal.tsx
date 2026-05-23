@@ -368,12 +368,13 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
 
             // Load flight duties
             const { data: flightsData, error: flightsError } = await supabase
-              .from('flight_duties')
+              .from('schedules')
               .select('*')
-              .eq('pilot_id', finalPilotId);
+              .eq('user_id', finalPilotId);
 
             if (!flightsError && flightsData) {
-              db.saveFlights(flightsData);
+              const mappedFlights = flightsData.map(f => ({ ...f, pilot_id: f.user_id }));
+              db.saveFlights(mappedFlights);
             }
 
             db.setCurrentPilotId(finalPilotId);

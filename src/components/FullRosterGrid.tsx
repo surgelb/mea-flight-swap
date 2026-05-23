@@ -26,14 +26,18 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
   const sheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const loadFilteredData = () => {
       setProfiles(db.getProfiles());
-      setAllFlights(db.getFlights());
-    }, 0);
-    const interval = setInterval(() => {
-      setProfiles(db.getProfiles());
-      setAllFlights(db.getFlights());
-    }, 3000);
+      const todayStr = new Date().toISOString().split('T')[0];
+      const futureFlights = db.getFlights().filter(f => {
+        const fDate = (f as any).date || (f.departure_time ? f.departure_time.split('T')[0] : (f.reporting_time ? f.reporting_time.split('T')[0] : `2026-05-${String(f.day_number).padStart(2, '0')}`));
+        return fDate >= todayStr;
+      });
+      setAllFlights(futureFlights);
+    };
+
+    const timer = setTimeout(loadFilteredData, 0);
+    const interval = setInterval(loadFilteredData, 3000);
     return () => {
       clearTimeout(timer);
       clearInterval(interval);
@@ -126,7 +130,8 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
     setActivePopover(null);
   };
 
-  const days = Array.from({ length: 31 }, (_, i) => i + 1);
+  const currentDay = new Date().getDate();
+  const days = Array.from({ length: 31 - currentDay + 1 }, (_, i) => i + currentDay);
 
   const pilotLastName = (name: string) => {
     // Name format: "LAST, First" or "LAST FIRST" — return first token before comma
