@@ -10,6 +10,25 @@ export interface PilotMetadata {
   email?: string;
 }
 
+interface RawFlight {
+  flight_number: string;
+  flight_number_raw: string;
+  origin: string;
+  destination: string;
+  departure_time: string;
+  arrival_time: string;
+  aircraft_type: string | null;
+}
+
+interface RawEvent {
+  type: 'off' | 'standby' | 'training' | 'flight_group' | 'unknown';
+  desc?: string;
+  start?: string;
+  end?: string;
+  code?: string;
+  flights?: RawFlight[];
+}
+
 export interface Duty {
   day_number: number;
   duty_type: 'flight' | 'standby' | 'training' | 'off';
@@ -48,7 +67,7 @@ export function parseRosterTextProgrammatic(text: string): RosterParseResult | n
     let id = '';
     let rank: 'captain' | 'first_officer' = 'first_officer';
     let base = 'BEY';
-    let qualifications: string[] = [];
+    const qualifications: string[] = [];
 
     // Extract pilot metadata
     for (const line of lines) {
@@ -74,20 +93,16 @@ export function parseRosterTextProgrammatic(text: string): RosterParseResult | n
             if (details[0]) base = details[0];
           }
           
-          // Extract qualifications
-          const qualsList = parenMatch[1].split(',');
-          qualsList.forEach((q) => {
-            const cleanQual = q.replace(/[^A-Za-z0-9-]/g, '').trim();
-            if (cleanQual) {
-              const fleetMatch = cleanQual.match(/A\d{3}[A-Z]?/i) || cleanQual.match(/FO-A\d{3}[A-Z]?/i) || cleanQual.match(/CPT-A\d{3}[A-Z]?/i);
-              if (fleetMatch) {
-                const rating = cleanQual.replace(/^(FO-|CPT-)/i, '');
-                if (!qualifications.includes(rating)) {
-                  qualifications.push(rating);
-                }
+          // Extract qualifications using a regex that matches any Airbus fleet rating (e.g. A320, A321, A32A)
+          const ratingMatches = parenMatch[1].match(/A\d{2,3}[A-Z]?/gi);
+          if (ratingMatches) {
+            ratingMatches.forEach((rating) => {
+              const cleanRating = rating.toUpperCase();
+              if (!qualifications.includes(cleanRating)) {
+                qualifications.push(cleanRating);
               }
-            }
-          });
+            });
+          }
         }
       }
     }
@@ -132,10 +147,14 @@ export function parseRosterTextProgrammatic(text: string): RosterParseResult | n
       }
     }
 
-    // Find header index
+    // Find header index using a flexible regex to match any month's weekday labels
     let headerIndex = -1;
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes('1 Fri') && lines[i].includes('2 Sat') && lines[i].includes('31 Sun')) {
+      const line = lines[i];
+      if (/1 (?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Mo|Tu|We|Th|Fr|Sa|Su)/i.test(line) &&
+          /2 (?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Mo|Tu|We|Th|Fr|Sa|Su)/i.test(line) &&
+          /3 (?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Mo|Tu|We|Th|Fr|Sa|Su)/i.test(line) &&
+          /28 (?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Mo|Tu|We|Th|Fr|Sa|Su)/i.test(line)) {
         headerIndex = i;
         break;
       }
@@ -147,7 +166,7 @@ export function parseRosterTextProgrammatic(text: string): RosterParseResult | n
 
     // Extract known flight dates from OTHER CREW MEMBERS
     const knownFlightDates: { day: number; flightNumber: string }[] = [];
-    const otherCrewRegex = /(\d{2})\/(\d{2})\/(\d{4})(\d+[A-Z]?)/g;
+    const otherCrewRegex = /(\d{2})\/(\d{2})\/(\d{4})\s*(\d+[A-Z]?)/g;
     let match;
     while ((match = otherCrewRegex.exec(text)) !== null) {
       knownFlightDates.push({
@@ -219,7 +238,7 @@ export function parseRosterTextProgrammatic(text: string): RosterParseResult | n
     }
 
     // Parse raw events sequentially
-    const rawEvents: any[] = [];
+    const rawEvents: RawEvent[] = [];
     let tokenIdx = 0;
     
     while (tokenIdx < tokens.length) {
@@ -240,20 +259,31 @@ export function parseRosterTextProgrammatic(text: string): RosterParseResult | n
         tokenIdx += 3;
         continue;
       }
+
+      // Check if it is a training event: 4 uppercase letters (not off codes) followed by two times
+      const next1 = tokens[tokenIdx + 1];
+      const next2 = tokens[tokenIdx + 2];
+      if (typeof token === 'string' && /^[A-Z]{4}$/.test(token) && next1 && /^\d{2}:\d{2}$/.test(next1) && next2 && /^\d{2}:\d{2}$/.test(next2)) {
+        rawEvents.push({
+          type: 'training',
+          code: token,
+          start: next1,
+          end: next2
+        });
+        tokenIdx += 3;
+        continue;
+      }
       
       let isFlight = false;
-      let flightTokenOffset = 0;
       
       if (token === 'e' && /^\d+$/.test(tokens[tokenIdx + 1])) {
         isFlight = true;
-        flightTokenOffset = 1;
       } else if (/^\d+$/.test(token)) {
         isFlight = true;
-        flightTokenOffset = 0;
       }
       
       if (isFlight) {
-        const flightsInGroup: any[] = [];
+        const flightsInGroup: RawFlight[] = [];
         
         while (tokenIdx < tokens.length) {
           const currentToken = tokens[tokenIdx];
@@ -343,22 +373,41 @@ export function parseRosterTextProgrammatic(text: string): RosterParseResult | n
     // Align raw events to calendar days using known dates
     const alignedDuties: Duty[] = [];
     let currentDay = 1;
+    const daysInMonth = new Date(parseInt(year, 10), parseInt(month, 10), 0).getDate();
 
-    function getKnownDateForFlightGroup(group: any): number | null {
-      for (const fl of group.flights) {
-        const tr = trainingDates.find(t => t.time === fl.departure_time);
-        if (tr) return tr.day;
-        
-        const oc = knownFlightDates.find(k => k.flightNumber.replace(/[A-Z]$/i, '') === fl.flight_number_raw);
-        if (oc) return oc.day;
+    function getKnownDateForFlightGroup(group: RawEvent, currDay: number): number | null {
+      let bestDay = null;
+      const flights = group.flights || [];
+      for (const fl of flights) {
+        const matches = knownFlightDates
+          .filter(k => k.flightNumber.replace(/[A-Z]$/i, '') === fl.flight_number_raw && k.day >= currDay)
+          .sort((a, b) => a.day - b.day);
+        if (matches.length > 0) {
+          const matchDay = matches[0].day;
+          if (bestDay === null || matchDay < bestDay) {
+            bestDay = matchDay;
+          }
+        }
+      }
+      return bestDay;
+    }
+
+    function getKnownDateForTraining(event: RawEvent, currDay: number): number | null {
+      const matches = trainingDates
+        .filter(t => t.time === event.start && t.day >= currDay)
+        .sort((a, b) => a.day - b.day);
+      if (matches.length > 0) {
+        return matches[0].day;
       }
       return null;
     }
 
     for (const event of rawEvents) {
+      if (currentDay > daysInMonth) break;
+
       if (event.type === 'flight_group') {
-        const knownDay = getKnownDateForFlightGroup(event);
-        if (knownDay !== null && knownDay > currentDay) {
+        const knownDay = getKnownDateForFlightGroup(event, currentDay);
+        if (knownDay !== null && knownDay > currentDay && knownDay <= daysInMonth) {
           while (currentDay < knownDay) {
             alignedDuties.push({
               day_number: currentDay,
@@ -376,20 +425,57 @@ export function parseRosterTextProgrammatic(text: string): RosterParseResult | n
           }
         }
         
-        event.flights.forEach((fl: any) => {
+        event.flights?.forEach((fl) => {
+          if (currentDay <= daysInMonth) {
+            alignedDuties.push({
+              day_number: currentDay,
+              duty_type: 'flight',
+              flight_number: fl.flight_number,
+              origin: fl.origin,
+              destination: fl.destination,
+              departure_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.departure_time}:00Z`,
+              arrival_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.arrival_time}:00Z`,
+              reporting_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.departure_time}:00Z`,
+              release_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.arrival_time}:00Z`,
+              aircraft_type: fl.aircraft_type
+            });
+          }
+        });
+        currentDay++;
+      } else if (event.type === 'training') {
+        const knownDay = getKnownDateForTraining(event, currentDay);
+        if (knownDay !== null && knownDay > currentDay && knownDay <= daysInMonth) {
+          while (currentDay < knownDay) {
+            alignedDuties.push({
+              day_number: currentDay,
+              duty_type: 'off',
+              flight_number: null,
+              origin: null,
+              destination: null,
+              departure_time: null,
+              arrival_time: null,
+              reporting_time: null,
+              release_time: null,
+              aircraft_type: null
+            });
+            currentDay++;
+          }
+        }
+
+        if (currentDay <= daysInMonth) {
           alignedDuties.push({
             day_number: currentDay,
-            duty_type: 'flight',
-            flight_number: fl.flight_number,
-            origin: fl.origin,
-            destination: fl.destination,
-            departure_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.departure_time}:00Z`,
-            arrival_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.arrival_time}:00Z`,
-            reporting_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.departure_time}:00Z`,
-            release_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${fl.arrival_time}:00Z`,
-            aircraft_type: fl.aircraft_type
+            duty_type: 'training',
+            flight_number: event.code || null,
+            origin: null,
+            destination: null,
+            departure_time: null,
+            arrival_time: null,
+            reporting_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${event.start}:00Z`,
+            release_time: `${year}-${month}-${currentDay.toString().padStart(2, '0')}T${event.end}:00Z`,
+            aircraft_type: null
           });
-        });
+        }
         currentDay++;
       } else if (event.type === 'standby') {
         alignedDuties.push({
@@ -419,12 +505,10 @@ export function parseRosterTextProgrammatic(text: string): RosterParseResult | n
           aircraft_type: null
         });
         currentDay++;
-      } else {
-        currentDay++;
       }
     }
 
-    while (currentDay <= 31) {
+    while (currentDay <= daysInMonth) {
       alignedDuties.push({
         day_number: currentDay,
         duty_type: 'off',

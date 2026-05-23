@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pdf from 'pdf-parse';
 import { openai, generateContentWithFallback, cleanAndParseJson } from '@/lib/openrouter';
-import { parseRosterTextProgrammatic } from '@/lib/roster-parser';
+import { parseRosterTextProgrammatic, Duty } from '@/lib/roster-parser';
 
 export const maxDuration = 60; // Allow up to 60 seconds on Vercel for OpenRouter cascade
 
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
               rank: programmaticResult.pilot_metadata.rank,
               base: programmaticResult.pilot_metadata.base
             },
-            duties: programmaticResult.duties.map((d: any) => ({
+            duties: programmaticResult.duties.map((d: Duty) => ({
               day_number: d.day_number,
               duty_type: d.duty_type,
               flight_number: d.flight_number,

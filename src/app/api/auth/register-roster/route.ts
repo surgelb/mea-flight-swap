@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import pdf from 'pdf-parse';
 import { openai, generateContentWithFallback, cleanAndParseJson } from '@/lib/openrouter';
-import { parseRosterTextProgrammatic } from '@/lib/roster-parser';
+import { parseRosterTextProgrammatic, RosterParseResult } from '@/lib/roster-parser';
+
+interface ExtendedRosterParseResult extends RosterParseResult {
+  invalidReason?: string;
+}
 
 export const maxDuration = 60; // Allow up to 60 seconds on Vercel for OpenRouter cascade
 
@@ -46,7 +50,7 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    let result: any = null;
+    let result: ExtendedRosterParseResult | null = null;
 
     // Try programmatic parsing first
     console.log('[Register Roster API] Trying programmatic PDF parsing...');
