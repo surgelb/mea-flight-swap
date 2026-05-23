@@ -45,8 +45,6 @@ export interface SwapProposal {
   proposer_id: string;
   proposed_flight_id: string;
   status: 'pending' | 'accepted' | 'rejected';
-  legality_check_passed: boolean;
-  legality_notes: string;
   created_at: string;
 }
 

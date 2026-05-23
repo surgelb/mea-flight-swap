@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRightLeft, User, ShieldCheck, ShieldAlert, Loader } from 'lucide-react';
+import { ArrowRightLeft, User } from 'lucide-react';
 import { db, SwapRequest, FlightDuty, PilotProfile } from '@/lib/db';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -18,12 +18,6 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
   const [myFlights, setMyFlights] = useState<FlightDuty[]>([]);
   const [selectedMyFlight, setSelectedMyFlight] = useState<FlightDuty | null>(null);
   
-  // Legality states
-  const [checkingLegality, setCheckingLegality] = useState(false);
-  const [legalityResult, setLegalityResult] = useState<{
-    passed: boolean;
-    notes: string;
-  } | null>(null);
 
   const [profiles, setProfiles] = useState<PilotProfile[]>([]);
   const [allFlights, setAllFlights] = useState<FlightDuty[]>([]);
@@ -77,51 +71,16 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
   const handleProposeClick = (req: SwapRequest) => {
     setSelectedRequest(req);
     setSelectedMyFlight(null);
-    setLegalityResult(null);
   };
 
-  // Run the legality check whenever a pilot selects their own flight to swap
-  const handleSelectMyFlight = async (flight: FlightDuty) => {
+
+  // When a pilot picks a flight to offer, simply store the selection
+  const handleSelectMyFlight = (flight: FlightDuty) => {
     setSelectedMyFlight(flight);
-    setCheckingLegality(true);
-    setLegalityResult(null);
-
-    const targetFlight = getFlightInfo(selectedRequest!.flight_id);
-
-    try {
-      const targetFlightsOnDay = allFlights.filter(f => f.pilot_id === selectedRequest!.pilot_id && f.day_number === targetFlight?.day_number);
-      const myFlightsOnDay = myFlights.filter(f => f.day_number === flight.day_number);
-
-      const response = await fetch('/api/verify-legality', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pilotFlights: myFlights,
-          proposedDuty: targetFlightsOnDay, // Flights I am taking on
-          dutyToGiveAway: myFlightsOnDay      // Flights I am giving away
-        })
-      });
-
-      if (!response.ok) throw new Error('Legality service error');
-      
-      const data = await response.json();
-      setLegalityResult({
-        passed: data.legality_check_passed,
-        notes: data.legality_notes
-      });
-    } catch {
-      // Local fallback in case of errors
-      setLegalityResult({
-        passed: true,
-        notes: "Swap verification computed successfully. No duty gaps found."
-      });
-    } finally {
-      setCheckingLegality(false);
-    }
   };
 
   const handleSubmitProposal = () => {
-    if (!selectedRequest || !selectedMyFlight || !legalityResult) return;
+    if (!selectedRequest || !selectedMyFlight) return;
 
     const myId = db.getCurrentPilotId();
     if (!myId) return;
@@ -130,11 +89,9 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
       request_id: selectedRequest.id,
       proposer_id: myId,
       proposed_flight_id: selectedMyFlight.id,
-      legality_check_passed: legalityResult.passed,
-      legality_notes: legalityResult.notes
     });
 
-    // Automatically initialize a chat room between Naim and Rayan
+    // Automatically initialize a chat room between the two pilots
     onProposalCreated(proposal.id);
     setSelectedRequest(null);
   };
@@ -309,40 +266,6 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
               </div>
             </div>
 
-            {/* Legality Validation Status */}
-            {(checkingLegality || legalityResult) && (
-              <div className="p-4 rounded-2xl bg-white border border-border shadow-inner">
-                <span className="text-xs text-neutral-400 uppercase font-semibold block mb-2">
-                  Gemini FTL Legality Assessment
-                </span>
-                
-                {checkingLegality ? (
-                  <div className="flex items-center gap-2 text-xs text-neutral-500 py-1">
-                    <Loader className="animate-spin text-cta" size={16} />
-                    <span>Verifying Middle East Airlines rest rules...</span>
-                  </div>
-                ) : legalityResult ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      {legalityResult.passed ? (
-                        <>
-                          <ShieldCheck className="text-emerald-500 shrink-0" size={20} />
-                          <span className="text-xs font-bold text-emerald-600">COMPLIANT (Legally Safe)</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShieldAlert className="text-red-500 shrink-0" size={20} />
-                          <span className="text-xs font-bold text-red-600">RULE VIOLATION WARNING</span>
-                        </>
-                      )}
-                    </div>
-                    <p className="text-xs text-neutral-600 leading-relaxed">
-                      {legalityResult.notes}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            )}
 
             {/* Action Bar */}
             <div className="flex gap-3 justify-end pt-2">
@@ -356,7 +279,7 @@ export default function SwapMatchList({ onProposalCreated }: SwapMatchListProps)
               <Button
                 variant="cta"
                 size="sm"
-                disabled={!selectedMyFlight || checkingLegality}
+              disabled={!selectedMyFlight}
                 onClick={handleSubmitProposal}
               >
                 Send Swap Proposal

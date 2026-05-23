@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Send, ArrowLeft, ArrowRightLeft, ShieldCheck, ShieldAlert, CheckCircle } from 'lucide-react';
+import { Send, ArrowLeft, ArrowRightLeft, CheckCircle } from 'lucide-react';
 import { db, PilotProfile, FlightDuty, SwapProposal, ChatMessage } from '@/lib/db';
 import Card from '@/components/ui/Card';
 
@@ -250,18 +250,8 @@ export default function ChatRoom() {
               </div>
             </div>
 
-            {/* Legality indicator */}
+            {/* Approve Swap action */}
             <div className="flex items-center gap-2 border-l border-border md:pl-4 py-1">
-              {proposal?.legality_check_passed ? (
-                <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold bg-emerald-100/50 px-2.5 py-1 rounded-lg">
-                  <ShieldCheck size={14} /> FTL Compliant
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-xs text-red-600 font-bold bg-red-100/50 px-2.5 py-1 rounded-lg">
-                  <ShieldAlert size={14} /> FTL Rest Warning
-                </div>
-              )}
-              
               {proposal?.status !== 'accepted' ? (
                 <button
                   onClick={handleApproveSwapClick}
@@ -363,7 +353,7 @@ export default function ChatRoom() {
               Your flight lines have been swapped. This transaction has been dispatched to Middle East Airlines scheduling system.
             </p>
             <div className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 rounded-xl py-2 px-4 inline-block">
-              Compliance status: APPROVED (FTL compliant)
+              Roster swap confirmed — coordinate final details with MEA Scheduling.
             </div>
           </motion.div>
         </div>

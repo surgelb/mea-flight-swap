@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plane, LogOut, ShieldAlert, MessageSquare, Loader, ShieldCheck } from 'lucide-react';
+import { Plane, LogOut, ShieldAlert, MessageSquare } from 'lucide-react';
 import { db, PilotProfile, FlightDuty, SwapProposal } from '@/lib/db';
 import { supabase, hasSupabase } from '@/lib/supabase';
 import Button from '@/components/ui/Button';
@@ -43,11 +43,6 @@ export default function Dashboard() {
   const [directTargetPilot, setDirectTargetPilot] = useState<PilotProfile | null>(null);
   const [directTargetFlight, setDirectTargetFlight] = useState<FlightDuty | null>(null);
   const [selectedMyFlightForDirect, setSelectedMyFlightForDirect] = useState<FlightDuty | null>(null);
-  const [checkingDirectLegality, setCheckingDirectLegality] = useState(false);
-  const [directLegalityResult, setDirectLegalityResult] = useState<{
-    passed: boolean;
-    notes: string;
-  } | null>(null);
 
   const getGroupRoute = (group: FlightDuty[]) => {
     if (group[0]?.duty_type !== 'flight') return '';
@@ -147,50 +142,16 @@ export default function Dashboard() {
     setDirectTargetPilot(targetPilot);
     setDirectTargetFlight(targetFlight);
     setSelectedMyFlightForDirect(null);
-    setDirectLegalityResult(null);
     setIsDirectModalOpen(true);
   };
 
-  const handleSelectMyFlightForDirect = async (myFlight: FlightDuty) => {
+  const handleSelectMyFlightForDirect = (myFlight: FlightDuty) => {
     setSelectedMyFlightForDirect(myFlight);
-    setCheckingDirectLegality(true);
-    setDirectLegalityResult(null);
-
-    const allFlights = db.getFlights();
-    const targetFlightsOnDay = allFlights.filter(f => f.pilot_id === directTargetPilot?.id && f.day_number === directTargetFlight?.day_number);
-    const myFlightsOnDay = flights.filter(f => f.day_number === myFlight.day_number);
-
-    try {
-      const response = await fetch('/api/verify-legality', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pilotFlights: flights,
-          proposedDuty: targetFlightsOnDay,
-          dutyToGiveAway: myFlightsOnDay
-        })
-      });
-
-      if (!response.ok) throw new Error('Legality service error');
-      
-      const data = await response.json();
-      setDirectLegalityResult({
-        passed: data.legality_check_passed,
-        notes: data.legality_notes
-      });
-    } catch {
-      setDirectLegalityResult({
-        passed: true,
-        notes: "Swap verification computed successfully. No duty gaps found."
-      });
-    } finally {
-      setCheckingDirectLegality(false);
-    }
   };
 
   const handleDirectSwapSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!directTargetPilot || !directTargetFlight || !selectedMyFlightForDirect || !directLegalityResult || !pilot) return;
+    if (!directTargetPilot || !directTargetFlight || !selectedMyFlightForDirect || !pilot) return;
 
     // 1. Find or create a Swap Request for the target pilot's flight
     const openSwaps = db.getSwapRequests();
@@ -214,8 +175,6 @@ export default function Dashboard() {
       request_id: targetReq.id,
       proposer_id: pilot.id,
       proposed_flight_id: selectedMyFlightForDirect.id,
-      legality_check_passed: directLegalityResult.passed,
-      legality_notes: directLegalityResult.notes
     });
 
     // 3. Clear state and redirect to chat
@@ -223,7 +182,6 @@ export default function Dashboard() {
     setDirectTargetPilot(null);
     setDirectTargetFlight(null);
     setSelectedMyFlightForDirect(null);
-    setDirectLegalityResult(null);
     
     // Redirect to dynamic sorted room ID
     const ids = [pilot.id, directTargetPilot.id].sort();
@@ -375,9 +333,6 @@ export default function Dashboard() {
                     </h4>
                     <p className="text-xs text-neutral-600 mt-1">
                       They offer their <strong className="text-primary">{requesterFlightNumbers}</strong> (May {requesterFlight.day_number}) in trade for your <strong className="text-cta">{myFlightNumbers}</strong> (May {myFlight.day_number}).
-                    </p>
-                    <p className="text-[10px] text-neutral-500 italic mt-1.5">
-                      Safety Advisor: &ldquo;{prop.legality_notes}&rdquo;
                     </p>
                   </div>
                 </div>
@@ -660,40 +615,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Legality Validation Status */}
-            {(checkingDirectLegality || directLegalityResult) && (
-              <div className="p-4 rounded-2xl bg-white border border-border shadow-inner">
-                <span className="text-xs text-neutral-400 uppercase font-semibold block mb-2">
-                  Gemini FTL Legality Assessment
-                </span>
-                
-                {checkingDirectLegality ? (
-                  <div className="flex items-center gap-2 text-xs text-neutral-500 py-1">
-                    <Loader className="animate-spin text-cta" size={16} />
-                    <span>Verifying Middle East Airlines rest rules...</span>
-                  </div>
-                ) : directLegalityResult ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      {directLegalityResult.passed ? (
-                        <>
-                          <ShieldCheck className="text-emerald-500 shrink-0" size={20} />
-                          <span className="text-xs font-bold text-emerald-600">COMPLIANT (Legally Safe)</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShieldAlert className="text-red-500 shrink-0" size={20} />
-                          <span className="text-xs font-bold text-red-600">RULE VIOLATION WARNING</span>
-                        </>
-                      )}
-                    </div>
-                    <p className="text-xs text-neutral-600 leading-relaxed font-sans">
-                      {directLegalityResult.notes}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            )}
 
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="ghost" size="sm" type="button" onClick={() => setIsDirectModalOpen(false)}>
@@ -703,7 +624,7 @@ export default function Dashboard() {
                 variant="cta"
                 size="sm"
                 type="submit"
-                disabled={!selectedMyFlightForDirect || checkingDirectLegality}
+                disabled={!selectedMyFlightForDirect}
               >
                 Send Swap Proposal
               </Button>
