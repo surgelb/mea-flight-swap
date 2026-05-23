@@ -222,8 +222,8 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
                       className={`sticky top-0 z-20 border-r border-border/40 text-center ${
                         weekend ? 'bg-neutral-100 text-neutral-700' : 'bg-neutral-50 text-neutral-500'
                       }`}
-                      // Mobile: fill exactly 1/10th of remaining viewport; desktop: fixed 52px
-                      style={{ width: 'max(28px, calc((100vw - 90px) / 10))', minWidth: 28 }}
+                      // Mobile: fill exactly 1/10th of remaining viewport; desktop: capped to 42px
+                      style={{ width: 'clamp(28px, calc((100vw - 90px) / 10), 42px)', minWidth: 28 }}
                     >
                       <div className="flex flex-col items-center py-1.5 md:py-2 px-0">
                         <span className="text-[8px] md:text-[9px] uppercase font-bold tracking-tight leading-none">
@@ -307,7 +307,7 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
                           className={`p-0.5 md:p-1 border-r border-border/30 align-middle ${
                             weekend ? 'bg-neutral-50/60' : ''
                           } ${isClickable ? 'cursor-pointer' : ''}`}
-                          style={{ width: 'max(28px, calc((100vw - 90px) / 10))', minWidth: 28 }}
+                          style={{ width: 'clamp(28px, calc((100vw - 90px) / 10), 42px)', minWidth: 28 }}
                         >
                           <div className="flex flex-col gap-0.5 items-center justify-center">
                             {duties.length === 0 ? (
