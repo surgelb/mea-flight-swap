@@ -67,7 +67,8 @@ export async function POST(req: Request) {
       Analyze the provided Middle East Airlines (MEA) "Personal Crew Schedule Report" pilot roster text.
       
       First, verify if this text corresponds to a valid MEA crew schedule/roster.
-      If it does not contain typical elements of an MEA roster (like flight numbers ME201, ME310, or mentions of BEY, CPT, FO, crew ID), set "isValidRoster" to false.
+      Note that flight numbers in the text may be printed as just numbers (e.g. 201, 310, 426, 217) without the "ME" prefix.
+      If it contains typical elements of an MEA roster (like numeric flight patterns 201/310/426/265/217, or mentions of BEY, CPT, FO, crew ID, qualification, name), set "isValidRoster" to true. Otherwise, if it is completely irrelevant text, set "isValidRoster" to false.
       
       Second, extract the pilot's metadata:
       - first_name (the pilot's legal first name, e.g. "NAIM" from "MOGHABGHAB, NAIM ghassan" or "RAYAN" from "MROUEH, RAYAN jamal")
