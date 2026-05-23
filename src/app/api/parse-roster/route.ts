@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pdf from 'pdf-parse';
 import { openai, generateContentWithFallback, cleanAndParseJson } from '@/lib/openrouter';
+import { parseRosterTextProgrammatic } from '@/lib/roster-parser';
 
 export const maxDuration = 60; // Allow up to 60 seconds on Vercel for OpenRouter cascade
 
@@ -49,6 +50,33 @@ export async function POST(req: Request) {
     if (isPDF) {
       try {
         const textResult = await pdf(Buffer.from(fileBytes));
+        
+        console.log('[Parse Roster API] Trying programmatic PDF parsing...');
+        const programmaticResult = parseRosterTextProgrammatic(textResult.text);
+        if (programmaticResult) {
+          console.log('[Parse Roster API] Programmatic PDF parsing succeeded!');
+          const cleanResult = {
+            pilot_metadata: {
+              name: programmaticResult.pilot_metadata.name,
+              id: programmaticResult.pilot_metadata.id,
+              rank: programmaticResult.pilot_metadata.rank,
+              base: programmaticResult.pilot_metadata.base
+            },
+            duties: programmaticResult.duties.map((d: any) => ({
+              day_number: d.day_number,
+              duty_type: d.duty_type,
+              flight_number: d.flight_number,
+              origin: d.origin,
+              destination: d.destination,
+              departure_time: d.departure_time,
+              arrival_time: d.arrival_time,
+              aircraft_type: d.aircraft_type
+            }))
+          };
+          return NextResponse.json(cleanResult);
+        }
+
+        console.log('[Parse Roster API] Programmatic parser returned null, falling back to OpenRouter LLM...');
         const cleanedText = cleanRosterText(textResult.text);
         contentPayload = [{ text: `Roster Text Content:\n${cleanedText}` }];
       } catch (parseError) {
