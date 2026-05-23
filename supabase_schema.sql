@@ -98,7 +98,7 @@ create policy "Allow all write access to chat_messages" on public.chat_messages 
 create or replace function public.handle_delete_user()
 returns trigger as $$
 begin
-    delete from public.profiles where id = old.id;
+    delete from public.profiles where id = old.id::text;
     return old;
 end;
 $$ language plpgsql security definer;
