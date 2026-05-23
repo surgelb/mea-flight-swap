@@ -309,6 +309,7 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
     try {
       let loggedIn = false;
       let finalPilotId = '';
+      let supabaseErrorMsg = '';
 
       if (hasSupabase) {
         try {
@@ -380,15 +381,21 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
             db.setCurrentPilotId(finalPilotId);
             loggedIn = true;
           } else {
-            console.warn('Supabase signInWithPassword failed, trying local fallback:', authError);
+            console.warn('Supabase signInWithPassword failed:', authError);
+            supabaseErrorMsg = authError?.message || 'Authentication failed.';
           }
         } catch (supabaseErr) {
-          console.warn('Supabase authentication error, checking local fallback:', supabaseErr);
+          console.warn('Supabase authentication error:', supabaseErr);
+          supabaseErrorMsg = supabaseErr instanceof Error ? supabaseErr.message : 'Supabase connection error.';
         }
       }
 
       if (!loggedIn) {
-        // Fallback offline Mock Auth
+        if (hasSupabase) {
+          throw new Error(supabaseErrorMsg || 'Invalid credentials or user does not exist.');
+        }
+
+        // Fallback offline Mock Auth (only used when hasSupabase is false)
         const profiles = db.getProfiles();
         const pilot = profiles.find(p => {
           if (!p) return false;
