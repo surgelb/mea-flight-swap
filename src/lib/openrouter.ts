@@ -61,11 +61,11 @@ export async function generateContentWithFallback(
   // OpenRouter models to cascade try (only free models to prevent using paid credits)
   const models = [
     'google/gemma-4-31b-it:free',
+    'openai/gpt-oss-20b:free',
     'google/gemma-4-26b-a4b-it:free',
+    'openai/gpt-oss-120b:free',
     'meta-llama/llama-3.3-70b-instruct:free',
-    'qwen/qwen3-coder:free',
-    'meta-llama/llama-3.2-3b-instruct:free',
-    'nousresearch/hermes-3-llama-3.1-405b:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
   ];
   let lastError: unknown = null;
 
@@ -81,7 +81,7 @@ export async function generateContentWithFallback(
       };
 
       const response = await openai.chat.completions.create(completionParams, {
-        timeout: 7000, // 7 seconds timeout per model attempt
+        timeout: 15000, // 15 seconds timeout per model attempt to allow stable models time to complete
       });
       console.log(`[OpenRouter] Completion successful with model: ${model}`);
       return {

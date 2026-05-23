@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { openai, generateContentWithFallback } from '@/lib/openrouter';
 
+export const maxDuration = 60; // Allow up to 60 seconds on Vercel for OpenRouter cascade
+
 interface FlightCheckDuty {
   duty_type: string;
   flight_number: string | null;

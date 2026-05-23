@@ -2,6 +2,23 @@ import { NextResponse } from 'next/server';
 import pdf from 'pdf-parse';
 import { openai, generateContentWithFallback, cleanAndParseJson } from '@/lib/openrouter';
 
+export const maxDuration = 60; // Allow up to 60 seconds on Vercel for OpenRouter cascade
+
+function cleanRosterText(text: string): string {
+  // Collapse multiple spaces
+  let cleaned = text.replace(/[ \t]+/g, ' ');
+  // Collapse multiple newlines
+  cleaned = cleaned.replace(/\n\s*\n+/g, '\n');
+  
+  // Truncate at "OTHER CREW MEMBERS" to discard the massive table at the bottom and avoid confusion/token waste
+  const truncateIndex = cleaned.toUpperCase().indexOf('OTHER CREW MEMBERS');
+  if (truncateIndex !== -1) {
+    cleaned = cleaned.substring(0, truncateIndex);
+  }
+  
+  return cleaned.trim();
+}
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -32,7 +49,8 @@ export async function POST(req: Request) {
     if (isPDF) {
       try {
         const textResult = await pdf(Buffer.from(fileBytes));
-        contentPayload = [{ text: `Roster Text Content:\n${textResult.text}` }];
+        const cleanedText = cleanRosterText(textResult.text);
+        contentPayload = [{ text: `Roster Text Content:\n${cleanedText}` }];
       } catch (parseError) {
         console.error('[Parse Roster API] pdf-parse error:', parseError);
         const message = parseError instanceof Error ? parseError.message : String(parseError);

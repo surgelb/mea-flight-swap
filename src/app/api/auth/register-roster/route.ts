@@ -2,6 +2,23 @@ import { NextResponse } from 'next/server';
 import pdf from 'pdf-parse';
 import { openai, generateContentWithFallback, cleanAndParseJson } from '@/lib/openrouter';
 
+export const maxDuration = 60; // Allow up to 60 seconds on Vercel for OpenRouter cascade
+
+function cleanRosterText(text: string): string {
+  // Collapse multiple spaces
+  let cleaned = text.replace(/[ \t]+/g, ' ');
+  // Collapse multiple newlines
+  cleaned = cleaned.replace(/\n\s*\n+/g, '\n');
+  
+  // Truncate at "OTHER CREW MEMBERS" to discard the massive table at the bottom and avoid confusion/token waste
+  const truncateIndex = cleaned.toUpperCase().indexOf('OTHER CREW MEMBERS');
+  if (truncateIndex !== -1) {
+    cleaned = cleaned.substring(0, truncateIndex);
+  }
+  
+  return cleaned.trim();
+}
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -14,12 +31,12 @@ export async function POST(req: Request) {
     console.log(`[Register Roster API] Processing file: ${file.name}, size: ${file.size} bytes`);
 
     // Parse the PDF buffer using pdf-parse
-    let text = '';
+    let rawText = '';
     try {
       const fileBytes = await file.arrayBuffer();
       
       const textResult = await pdf(Buffer.from(fileBytes));
-      text = textResult.text;
+      rawText = textResult.text;
     } catch (parseError) {
       console.error('[Register Roster API] pdf-parse error:', parseError);
       const message = parseError instanceof Error ? parseError.message : String(parseError);
@@ -28,7 +45,9 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    if (!text || text.trim().length < 50) {
+    const text = cleanRosterText(rawText);
+
+    if (!text || text.length < 50) {
       return NextResponse.json({ 
         error: 'The uploaded file contains insufficient text. Please upload a valid MEA Crew Roster PDF.' 
       }, { status: 400 });
