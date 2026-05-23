@@ -207,6 +207,13 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
       let finalPilotId = `mock-${meta.username}`;
 
       if (hasSupabase) {
+        // Query if profile with this email already exists
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', meta.email)
+          .maybeSingle();
+
         // Sign up with Supabase Auth
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: meta.email,
@@ -228,6 +235,13 @@ export default function SignUpModal({ isOpen, onClose, initialMode = 'signup' }:
 
         if (authData.user?.id) {
           finalPilotId = authData.user.id;
+        }
+
+        // If the email already exists in profiles table under a different ID, delete the old profile to avoid 409 conflict
+        if (existingProfile && existingProfile.id !== finalPilotId) {
+          console.log(`[SignUp] Email ${meta.email} already exists with ID ${existingProfile.id}. Deleting old profile for new signup...`);
+          await db.deleteProfile(existingProfile.id);
+          db.clearFlightsForPilot(existingProfile.id);
         }
       }
 

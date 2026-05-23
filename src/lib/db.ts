@@ -236,6 +236,19 @@ class DB {
     }
   }
 
+  async deleteProfile(id: string) {
+    const stored = this.get<PilotProfile[]>('mfs_profiles', []);
+    const filtered = stored.filter(p => p.id !== id);
+    this.set('mfs_profiles', filtered);
+
+    if (hasSupabase) {
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase delete error (profiles):', error);
+      }
+    }
+  }
+
   // Flights
   getFlights(pilotId?: string | null): FlightDuty[] {
     if (pilotId === null) return [];
