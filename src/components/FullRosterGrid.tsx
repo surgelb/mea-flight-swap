@@ -51,6 +51,9 @@ export default function FullRosterGrid({ currentPilotId, onProposeSwap, onPostOw
 
   // Filter profiles based on search and qualification filter
   const filteredProfiles = profiles.filter(p => {
+    if (p?.email === 'test.pilot@mea.com.lb' || (p?.name || '').toUpperCase().includes('TEST PILOT')) {
+      return false;
+    }
     const name = (p?.name || '').toLowerCase();
     const rank = (p?.rank || '').toLowerCase().replace('_', ' ');
     const query = (searchQuery || '').toLowerCase();
